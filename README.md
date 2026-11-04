@@ -1,3 +1,9 @@
+# FloatX 0.5.0 — centre de contrôle et dispositions
+
+Dans FloatX, « Configurer le centre de contrôle » associe quatre raccourcis à des applis. Accepter l’ajout proposé par Android, ou ouvrir le centre de contrôle → Modifier et ajouter FloatX 1 à 4. Le nom et l’icône suivent l’application choisie. Chaque appui replie le panneau et ouvre/restaure l’appli en flottant. La tuile « FloatX · Choisir » permet de choisir une appli à chaque fois. Shizuku et l’autorisation d’affichage flottant doivent être prêts ; sinon FloatX ouvre la configuration. L’affichage des tuiles et leur ajout dépendent du panneau XOS.
+
+Le menu ⋯ → Placement propose moitié gauche/droite, centre et chacun des quatre quarts. « Organiser les fenêtres (1 à 4) » place jusqu’à quatre fenêtres déjà ouvertes (une au centre, deux côte à côte, trois ou quatre dans les quarts ; la fenêtre sélectionnée en premier), et réduit les autres en bulles. Le bouton principal « Ouvrir jusqu’à quatre applis en grille » sélectionne et lance directement les applications. La grille laisse une place à la barre de raccourcis et les positions se recalculent après rotation. Glisser ou redimensionner manuellement quitte le placement automatique de cette fenêtre. Le minimum manuel passe à 120 × 140 dp pour permettre les quarts sur téléphone.
+
 # FloatX 0.4.5 — Retour du menu et accueil de l’appli
 
 La capture globale de Retour introduite en 0.4.4 est retirée (BackRouter et sa fenêtre auxiliaire supprimés). Le panneau principal reprend le comportement de 0.4.3. Les diagnostics de perte de Shizuku restent disponibles.

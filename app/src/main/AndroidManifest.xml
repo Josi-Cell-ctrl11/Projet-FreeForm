@@ -23,6 +23,33 @@
         <activity android:name=".FreeformProbeActivity" android:exported="false"
             android:resizeableActivity="true" android:taskAffinity="com.josias.floatx.probe"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden" />
+        <activity android:name=".TileLaunchActivity" android:exported="false"
+            android:excludeFromRecents="true" android:noHistory="true" android:theme="@style/WorkspaceTheme" />
+        <service android:name=".AppChooserTile" android:label="FloatX · Choisir" android:icon="@drawable/ic_floatx"
+            android:exported="true" android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter><action android:name="android.service.quicksettings.action.QS_TILE" /></intent-filter>
+            <meta-data android:name="android.service.quicksettings.ACTIVE_TILE" android:value="true" />
+        </service>
+        <service android:name=".AppTileOne" android:label="FloatX 1" android:icon="@drawable/ic_floatx"
+            android:exported="true" android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter><action android:name="android.service.quicksettings.action.QS_TILE" /></intent-filter>
+            <meta-data android:name="android.service.quicksettings.ACTIVE_TILE" android:value="true" />
+        </service>
+        <service android:name=".AppTileTwo" android:label="FloatX 2" android:icon="@drawable/ic_floatx"
+            android:exported="true" android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter><action android:name="android.service.quicksettings.action.QS_TILE" /></intent-filter>
+            <meta-data android:name="android.service.quicksettings.ACTIVE_TILE" android:value="true" />
+        </service>
+        <service android:name=".AppTileThree" android:label="FloatX 3" android:icon="@drawable/ic_floatx"
+            android:exported="true" android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter><action android:name="android.service.quicksettings.action.QS_TILE" /></intent-filter>
+            <meta-data android:name="android.service.quicksettings.ACTIVE_TILE" android:value="true" />
+        </service>
+        <service android:name=".AppTileFour" android:label="FloatX 4" android:icon="@drawable/ic_floatx"
+            android:exported="true" android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter><action android:name="android.service.quicksettings.action.QS_TILE" /></intent-filter>
+            <meta-data android:name="android.service.quicksettings.ACTIVE_TILE" android:value="true" />
+        </service>
         <service android:name=".FloatingService" android:exported="false" android:foregroundServiceType="specialUse">
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="User-controlled floating app window and minimized bubble" />
         </service>

@@ -48,6 +48,12 @@ class FloatingService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == "STOP" || !Settings.canDrawOverlays(this)) { stopSelf(); return START_NOT_STICKY }
+        if(intent?.action=="OPEN_GRID") {
+            val components=intent.getStringArrayListExtra("components").orEmpty().distinct().take(4)
+            val labels=intent.getStringArrayListExtra("labels").orEmpty()
+            components.forEachIndexed { index,value -> openSession(value,labels.getOrNull(index) ?: "Application") }
+            showDock();arrangeGrid(components);return START_NOT_STICKY
+        }
         if(intent?.action=="DOCK") { showDock();return START_NOT_STICKY }
         openSession(intent?.getStringExtra("component"),intent?.getStringExtra("label") ?: "Démo interactive")
         showDock()
@@ -67,6 +73,17 @@ class FloatingService : Service() {
         val session=WindowSession(key,component,label)
         sessions[key]=session
         session.start()
+    }
+    private fun arrangeGrid(order:List<String>) {
+        val chosen=order.mapNotNull { sessions[it] }.filter { it.canArrange() }.take(4)
+        if(chosen.isEmpty()) return
+        sessions.values.filter { it.canArrange() && it !in chosen }.forEach { it.minimizeForLayout() }
+        val slots=when(chosen.size) {
+            1 -> listOf(WindowPlacement.CENTER)
+            2 -> listOf(WindowPlacement.LEFT,WindowPlacement.RIGHT)
+            else -> listOf(WindowPlacement.TOP_LEFT,WindowPlacement.TOP_RIGHT,WindowPlacement.BOTTOM_LEFT,WindowPlacement.BOTTOM_RIGHT)
+        }
+        chosen.forEachIndexed { index,window -> window.snap(slots[index]) }
     }
     private fun closeSession(key:String,keepService:Boolean=false) {
         sessions.remove(key)?.dispose()
@@ -145,6 +162,7 @@ class FloatingService : Service() {
     private var minimized = false
     private var savedBox: WindowBox? = null
     private var full = false
+    private var placement:WindowPlacement?=null
     private var generation = 0
     private var ready = false
     private var surface: Surface? = null
@@ -226,7 +244,7 @@ class FloatingService : Service() {
             contentDescription="Commandes de $label ; glisser pour déplacer"
         }
         more.setOnTouchListener(gesture(onClick={ showMenu() }) { dx,dy ->
-            dismissMenu();params.x+=dx;params.y+=dy;updateWindow()
+            dismissMenu();placement=null;params.x+=dx;params.y+=dy;updateWindow()
         })
         panel.addView(more,FrameLayout.LayoutParams(d(44),d(30),Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply {
             topMargin=d(3)
@@ -242,9 +260,9 @@ class FloatingService : Service() {
                 }
             }
             resize.setOnTouchListener(gesture(onEnd={ resizeDisplay() }) { dx,dy ->
-                dismissMenu();full=false
+                dismissMenu();placement=null;full=false
                 val box=WindowGeometry.resize(WindowBox(params.x,params.y,params.width,params.height),
-                    corner,dx,dy,screenW,screenH,d(180),d(200))
+                    corner,dx,dy,screenW,screenH,d(120).coerceAtMost(params.width),d(140).coerceAtMost(params.height))
                 params.x=box.x;params.y=box.y;params.width=box.width;params.height=box.height
                 updateWindow();scheduleResize()
             })
@@ -268,29 +286,60 @@ class FloatingService : Service() {
     }
     private fun showMenu() {
         if(menu!=null) { dismissMenu();return }
-        raise()
-        sessions.values.forEach { it.dismissMenu() }
+        val entries=mutableListOf<Pair<String,()->Unit>>()
+        entries.add("Réduire en bulle" to { minimize() })
+        entries.add((if(full) "Restaurer la taille" else "Agrandir") to { toggleSize() })
+        entries.add("Placement de la fenêtre" to { showPlacementMenu() })
+        entries.add("Organiser les fenêtres (1 à 4)" to { arrangeGrid(listOf(key)+sessions.keys.filter { it!=key }) })
+        if(component!=null) entries.add("Retour dans l’application" to { remote { back() } })
+        entries.add("Fermer la fenêtre" to { closeSession(key) })
+        entries.add("Masquer les commandes" to { })
+        commandMenu(entries)
+    }
+    private fun showPlacementMenu() {
+        commandMenu(listOf(
+            "Moitié gauche" to { snap(WindowPlacement.LEFT) },
+            "Moitié droite" to { snap(WindowPlacement.RIGHT) },
+            "Au centre" to { snap(WindowPlacement.CENTER) },
+            "Quart supérieur gauche" to { snap(WindowPlacement.TOP_LEFT) },
+            "Quart supérieur droit" to { snap(WindowPlacement.TOP_RIGHT) },
+            "Quart inférieur gauche" to { snap(WindowPlacement.BOTTOM_LEFT) },
+            "Quart inférieur droit" to { snap(WindowPlacement.BOTTOM_RIGHT) },
+            "Retour aux commandes" to { showMenu() }
+        ))
+    }
+    private fun commandMenu(entries:List<Pair<String,()->Unit>>) {
+        raise();sessions.values.forEach { it.dismissMenu() }
         val list=LinearLayout(this@FloatingService).apply {
             orientation=LinearLayout.VERTICAL;setPadding(d(8),d(6),d(8),d(6))
             background=Ui.rounded(this@FloatingService,Color.WHITE,12);elevation=d(14).toFloat()
         }
-        fun item(title:String,action:()->Unit) {
+        entries.forEach { (title,action) ->
             list.addView(Ui.text(this@FloatingService,title,14f,Ui.INK).apply {
                 gravity=Gravity.CENTER_VERTICAL;setPadding(d(12),0,d(12),0)
                 layoutParams=LinearLayout.LayoutParams(-1,d(44))
                 setOnClickListener { dismissMenu();action() }
             })
         }
-        item("Réduire en bulle") { minimize() }
-        item(if(full) "Restaurer la taille" else "Agrandir") { toggleSize() }
-        if(component!=null) item("Retour dans l’application") { remote { back() } }
-        item("Fermer la fenêtre") { closeSession(key) }
-        item("Masquer les commandes") { }
-        val height=list.childCount*d(44)+d(12)
-        val box=WindowGeometry.clamp(WindowBox(params.x+(params.width-d(210))/2,params.y+d(36),d(210),height),
-            screenW,screenH,d(180),height.coerceAtMost(screenH))
-        menu=list
-        wm.addView(list,windowParams(box.width,box.height).apply { x=box.x;y=box.y })
+        val height=(entries.size*d(44)+d(12)).coerceAtMost((screenH-d(24)).coerceAtLeast(1))
+        val box=WindowGeometry.clamp(WindowBox(params.x+(params.width-d(250))/2,params.y+d(36),d(250),height),
+            screenW,screenH,d(180),height)
+        val scroll=ScrollView(this@FloatingService).apply { addView(list) }
+        menu=scroll
+        wm.addView(scroll,windowParams(box.width,box.height).apply { x=box.x;y=box.y })
+    }
+    fun canArrange()=component!=null && root!=null && !failed
+    fun minimizeForLayout() { minimize() }
+    fun snap(mode:WindowPlacement) {
+        dismissMenu();restore();applyPlacement(mode)
+    }
+    private fun applyPlacement(mode:WindowPlacement) {
+        placement=mode;full=false;savedBox=null
+        measureScreen()
+        val availableH=(screenH-if(dock!=null) d(64) else 0).coerceAtLeast(1)
+        val box=WindowPlacements.box(mode,screenW,availableH,d(6))
+        params.x=box.x;params.y=box.y;params.width=box.width;params.height=box.height
+        updateWindow();resizeDisplay()
     }
     private fun raise() {
         val panel=root ?: return
@@ -398,6 +447,7 @@ class FloatingService : Service() {
                 main.post { if(token==generation && !failed) {
                     main.removeCallbacks(startupTimeout)
                     ready=true;status?.visibility=View.GONE
+                    resizeDisplay()
                     main.removeCallbacks(rootCheck);main.postDelayed(rootCheck,900)
                     if(!target.trustedDisplay) toast("XOS a refusé l’écran TRUSTED. Mode standard conservé ; détails dans FloatX.")
                 } }
@@ -427,11 +477,12 @@ class FloatingService : Service() {
         root?.let { wm.updateViewLayout(it,params) }
     }
     private fun updateWindow() {
-        val box=WindowGeometry.clamp(WindowBox(params.x,params.y,params.width,params.height),screenW,screenH,d(180),d(200))
+        val box=WindowGeometry.clamp(WindowBox(params.x,params.y,params.width,params.height),screenW,screenH,d(120).coerceAtMost(params.width),d(140).coerceAtMost(params.height))
         params.x=box.x;params.y=box.y;params.width=box.width;params.height=box.height
         root?.let { if(it.isAttachedToWindow) wm.updateViewLayout(it,params) }
     }
     private fun toggleSize() {
+        placement=null
         if(!full) {
             savedBox=WindowBox(params.x,params.y,params.width,params.height)
             params.x=0;params.y=0;params.width=screenW;params.height=screenH
@@ -504,7 +555,8 @@ class FloatingService : Service() {
     }
     private fun toast(value:String) { Toast.makeText(this@FloatingService,value,Toast.LENGTH_LONG).show() }
     fun configurationChanged() {
-        dismissMenu();measureScreen();updateWindow();scheduleResize()
+        dismissMenu();measureScreen()
+        placement?.let { applyPlacement(it) } ?: run { updateWindow();scheduleResize() }
         bubble?.let { bubbleParams.x=(screenW-d(60)).coerceAtLeast(0);bubbleParams.y=bubbleParams.y.coerceIn(0,(screenH-d(56)).coerceAtLeast(0));wm.updateViewLayout(it,bubbleParams) }
     }
     fun dispose() {

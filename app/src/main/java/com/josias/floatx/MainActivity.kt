@@ -32,7 +32,7 @@ class MainActivity : Activity() {
         val scroll=ScrollView(this).apply { setBackgroundColor(0xFFF8F7F2.toInt());isFillViewport=true }
         val page=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL;setPadding(d(24),d(24),d(24),d(36)) }
         scroll.addView(page)
-        page.addView(Ui.text(this,"FLOATX  /  0.4.5 · MULTIFENÊTRES",12f,Ui.GREEN,true))
+        page.addView(Ui.text(this,"FLOATX  /  0.5.0 · MULTIFENÊTRES",12f,Ui.GREEN,true))
         page.addView(Ui.text(this,"Tes applis,\nen flottant.",38f,bold=true).apply { setPadding(0,d(16),0,d(12)) })
         page.addView(Ui.text(this,"Tes applis dans des fenêtres flottantes.",17f,Ui.MUTED))
         val card=LinearLayout(this).apply {
@@ -59,6 +59,8 @@ class MainActivity : Activity() {
             if(!Settings.canDrawOverlays(this)) message("Autorise d’abord l’affichage flottant.")
             else { startForegroundService(Intent(this,FloatingService::class.java).setAction("DOCK"));moveTaskToBack(true) }
         })
+        page.addView(Ui.button(this,"Configurer le centre de contrôle") { tileSettings() })
+        page.addView(Ui.button(this,"Ouvrir jusqu’à quatre applis en grille") { chooseGridApps() })
         page.addView(Ui.text(this,"Mode fenêtres système — secours",21f,bold=true))
         page.addView(Ui.button(this,"Ouvrir les options développeur") {
             try { startActivity(Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)) }
@@ -97,6 +99,10 @@ class MainActivity : Activity() {
         }
         setContentView(scroll)
         if(intent.getBooleanExtra("pick_pin",false)) scroll.post { choosePins() }
+        if(intent.hasExtra("configure_tile")) scroll.post {
+            val slot=intent.getIntExtra("configure_tile",0)
+            if(slot==0) requestRounded() else chooseTileApp(slot)
+        }
     }
     override fun onResume() {
         super.onResume()
@@ -127,6 +133,59 @@ class MainActivity : Activity() {
             val label=app.loadLabel(packageManager).toString()
             if(rounded) launchRounded(component,label) else launchNative(component,label)
         }.setNegativeButton("Annuler",null).show()
+    }
+    private fun tileSettings() {
+        val labels=(1..4).map { "Raccourci $it · ${AppTiles.label(this,it)}" }+"FloatX · choisir une appli à chaque appui"
+        AlertDialog.Builder(this).setTitle("Centre de contrôle").setItems(labels.toTypedArray()) { _,index ->
+            if(index==4) addTile(0) else chooseTileApp(index+1)
+        }.setNegativeButton("Fermer",null).show()
+    }
+    private fun chooseTileApp(slot:Int) {
+        val apps=packageManager.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER),0)
+            .filter { it.activityInfo.packageName!=packageName }.sortedBy { it.loadLabel(packageManager).toString().lowercase() }
+        AlertDialog.Builder(this).setTitle("Appli du raccourci $slot")
+            .setItems(apps.map { it.loadLabel(packageManager).toString() }.toTypedArray()) { _,index ->
+                val info=apps[index].activityInfo
+                getSharedPreferences("tiles",MODE_PRIVATE).edit().putString("slot_$slot",ComponentName(info.packageName,info.name).flattenToString()).apply()
+                AppTiles.refresh(this,slot);addTile(slot)
+            }.setNegativeButton("Annuler",null).show()
+    }
+    private fun addTile(slot:Int) {
+        if(Build.VERSION.SDK_INT>=33) {
+            try {
+                getSystemService(android.app.StatusBarManager::class.java).requestAddTileService(
+                    ComponentName(this,AppTiles.type(slot)),AppTiles.label(this,slot),AppTiles.icon(this,slot),mainExecutor) { result ->
+                    Toast.makeText(this,if(result==1 || result==2) "Raccourci prêt dans le centre de contrôle."
+                        else "Ouvre le centre de contrôle → Modifier, puis ajoute FloatX${if(slot==0) " · Choisir" else " $slot"}.",Toast.LENGTH_LONG).show()
+                }
+            } catch(_:RuntimeException) { message("Ouvre le centre de contrôle → Modifier, puis ajoute FloatX${if(slot==0) " · Choisir" else " $slot"}.") }
+        } else message("Ouvre le centre de contrôle → Modifier, puis ajoute la tuile FloatX.")
+    }
+    private fun chooseGridApps() {
+        if(Build.VERSION.SDK_INT<34) { message("Le cadre FloatX nécessite Android 14 ou supérieur.");return }
+        if(!Settings.canDrawOverlays(this) || !Shizuku.pingBinder() || Shizuku.checkSelfPermission()!=PackageManager.PERMISSION_GRANTED) {
+            message("Active d’abord l’affichage flottant et Shizuku.");return
+        }
+        val apps=packageManager.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER),0)
+            .filter { it.activityInfo.packageName!=packageName }
+            .distinctBy { ComponentName(it.activityInfo.packageName,it.activityInfo.name).flattenToString() }
+            .sortedBy { it.loadLabel(packageManager).toString().lowercase() }
+        val selected=linkedSetOf<Int>()
+        AlertDialog.Builder(this).setTitle("Choisir 1 à 4 applications")
+            .setMultiChoiceItems(apps.map { it.loadLabel(packageManager).toString() }.toTypedArray(),BooleanArray(apps.size)) { dialog,index,checked ->
+                if(checked && selected.size>=4) {
+                    (dialog as AlertDialog).listView.setItemChecked(index,false)
+                    Toast.makeText(this,"Quatre applications maximum pour cette grille.",Toast.LENGTH_SHORT).show()
+                } else if(checked) selected.add(index) else selected.remove(index)
+            }.setPositiveButton("Ouvrir en grille") { _,_ ->
+                if(selected.isNotEmpty()) {
+                    val targets=selected.map { ComponentName(apps[it].activityInfo.packageName,apps[it].activityInfo.name).flattenToString() }
+                    val labels=selected.map { apps[it].loadLabel(packageManager).toString() }
+                    startForegroundService(Intent(this,FloatingService::class.java).setAction("OPEN_GRID")
+                        .putStringArrayListExtra("components",ArrayList(targets)).putStringArrayListExtra("labels",ArrayList(labels)))
+                    moveTaskToBack(true)
+                }
+            }.setNegativeButton("Annuler",null).show()
     }
     private fun choosePins() {
         val query=Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
