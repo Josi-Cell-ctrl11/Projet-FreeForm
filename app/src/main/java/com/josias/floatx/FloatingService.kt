@@ -41,16 +41,38 @@ class FloatingService : Service() {
     private var surface: Surface? = null
     private var status: TextView? = null
     private var keyboardRow: LinearLayout? = null
+    private val startup = WindowStartup()
+    private val startupTimeout = Runnable {
+        val stalled = startup.timeout()
+        if (stalled != null && root != null) {
+            val detail = when (stalled) {
+                WindowStartup.Phase.WAITING_BOTH -> "D01 · Ni le moteur Shizuku ni l’affichage graphique ne sont prêts."
+                WindowStartup.Phase.WAITING_HOST -> "D02 · L’affichage est prêt, mais le moteur Shizuku ne répond pas. Vérifie que FloatX est autorisé dans Shizuku."
+                WindowStartup.Phase.WAITING_SURFACE -> "D03 · Le moteur Shizuku répond, mais la surface graphique ne démarre pas."
+                WindowStartup.Phase.READY_TO_OPEN, WindowStartup.Phase.OPENING -> "D04 · Le moteur est connecté, mais l’ouverture de l’appli n’a pas terminé."
+                else -> "D05 · Le démarrage de la fenêtre a échoué."
+            }
+            generation++
+            remote { close() }
+            fail("$detail\nFerme cette fenêtre puis réessaie. Si le problème persiste, envoie une capture de ce message.")
+        }
+    }
     private val args by lazy {
         Shizuku.UserServiceArgs(ComponentName(this,WindowHost::class.java))
-            .tag("floatx-window-host").version(1).daemon(false).processNameSuffix("window")
+            .tag("floatx-window-host").version(2).daemon(false).processNameSuffix("window")
     }
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
-            host=IWindowHost.Stub.asInterface(binder)
-            maybeOpen()
+            main.post {
+                if (root == null || startup.phase == WindowStartup.Phase.FAILED) return@post
+                host=IWindowHost.Stub.asInterface(binder)
+                if (host == null) { fail("D06 · Shizuku a renvoyé un moteur vide."); return@post }
+                startup.hostConnected()
+                status?.text="Moteur connecté · préparation de l’affichage…"
+                maybeOpen()
+            }
         }
-        override fun onServiceDisconnected(name: ComponentName?) { main.post { fail("Accès système interrompu. Ferme puis relance la fenêtre.") } }
+        override fun onServiceDisconnected(name: ComponentName?) { main.post { if(root != null) fail("Accès système interrompu. Ferme puis relance la fenêtre.") } }
     }
 
     override fun onCreate() {
@@ -74,6 +96,7 @@ class FloatingService : Service() {
         label=intent?.getStringExtra("label") ?: "Démo interactive"
         createWindow()
         if (component != null) {
+            main.postDelayed(startupTimeout,25_000)
             try { bound=true; Shizuku.bindUserService(args,connection) }
             catch (e: Exception) { fail("Accès système indisponible : ${e.message}") }
         }
@@ -89,7 +112,8 @@ class FloatingService : Service() {
     }
     private fun windowParams(width:Int,height:Int)=WindowManager.LayoutParams(width,height,
         WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+            WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
         android.graphics.PixelFormat.TRANSLUCENT).apply {
         gravity=Gravity.TOP or Gravity.START
         softInputMode=WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
@@ -182,7 +206,12 @@ class FloatingService : Service() {
         }
         frame.addView(status,FrameLayout.LayoutParams(-1,-1))
         view.surfaceTextureListener=object:TextureView.SurfaceTextureListener {
-            override fun onSurfaceTextureAvailable(st:SurfaceTexture,w:Int,h:Int) { maybeOpen() }
+            override fun onSurfaceTextureAvailable(st:SurfaceTexture,w:Int,h:Int) {
+                if (root == null || startup.phase == WindowStartup.Phase.FAILED) return
+                startup.surfaceAvailable()
+                status?.text=if(host==null) "Affichage prêt · connexion au moteur Shizuku…" else "Moteur connecté · ouverture de l’appli…"
+                maybeOpen()
+            }
             override fun onSurfaceTextureSizeChanged(st:SurfaceTexture,w:Int,h:Int) {}
             override fun onSurfaceTextureUpdated(st:SurfaceTexture) {}
             override fun onSurfaceTextureDestroyed(st:SurfaceTexture):Boolean = true
@@ -218,6 +247,8 @@ class FloatingService : Service() {
         val st=view.surfaceTexture ?: return
         val app=component ?: return
         if(ready || surface!=null) return
+        if (!startup.beginOpening()) return
+        status?.text="Moteur connecté · ouverture de l’appli…"
         renderW=(view.width*2).coerceAtLeast(2);renderH=(view.height*2).coerceAtLeast(2)
         st.setDefaultBufferSize(renderW,renderH)
         val nextSurface=Surface(st);surface=nextSurface
@@ -225,7 +256,10 @@ class FloatingService : Service() {
         io.execute {
             try {
                 target.open(nextSurface,renderW,renderH,(resources.displayMetrics.densityDpi*2).coerceAtMost(640),app)
-                main.post { if(token==generation) { ready=true;status?.visibility=View.GONE } }
+                main.post { if(token==generation && startup.phase!=WindowStartup.Phase.FAILED) {
+                    startup.complete();main.removeCallbacks(startupTimeout)
+                    ready=true;status?.visibility=View.GONE
+                } }
             } catch(e:Exception) { main.post { if(token==generation) fail("Ouverture refusée : ${e.message}") } }
         }
     }
@@ -322,13 +356,18 @@ class FloatingService : Service() {
             }
         }
     }
-    private fun fail(message:String) { ready=false;status?.apply { text=message;visibility=View.VISIBLE };toast(message) }
+    private fun fail(message:String) {
+        startup.fail();main.removeCallbacks(startupTimeout)
+        ready=false;status?.apply { text=message;visibility=View.VISIBLE };toast(message)
+    }
     private fun toast(value:String) { Toast.makeText(this,value,Toast.LENGTH_LONG).show() }
     override fun onConfigurationChanged(newConfig:android.content.res.Configuration) {
         super.onConfigurationChanged(newConfig);measureScreen();updateWindow()
         bubble?.let { bubbleParams.x=(screenW-d(60)).coerceAtLeast(0);bubbleParams.y=bubbleParams.y.coerceIn(0,(screenH-d(56)).coerceAtLeast(0));wm.updateViewLayout(it,bubbleParams) }
     }
     override fun onDestroy() {
+        main.removeCallbacks(startupTimeout)
+        startup.fail()
         generation++;ready=false
         val target=host;host=null
         bubble?.let { wm.removeView(it) };bubble=null

@@ -6,7 +6,7 @@ import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
 import android.os.Binder
 import android.os.Handler
-import android.os.Looper
+import android.os.HandlerThread
 import android.os.SystemClock
 import android.view.InputDevice
 import android.view.InputEvent
@@ -17,8 +17,11 @@ import android.view.Surface
 import java.util.concurrent.TimeUnit
 
 /** Runs only in a user-authorized Shizuku shell process. No app-data access. */
-class WindowHost(@Suppress("UNUSED_PARAMETER") context: Context) : IWindowHost.Stub() {
-    private val main = Handler(Looper.getMainLooper())
+class WindowHost(@Suppress("UNUSED_PARAMETER") context: Context?) : IWindowHost.Stub() {
+    constructor() : this(null)
+    // A shell process must not depend on an Activity/UI main looper being available.
+    private val callbacks = HandlerThread("FloatX-display").apply { start() }
+    private val main = Handler(callbacks.looper)
     private var display: VirtualDisplay? = null
     private var id = -1
 
@@ -96,5 +99,5 @@ class WindowHost(@Suppress("UNUSED_PARAMETER") context: Context) : IWindowHost.S
     }
 
     @Synchronized override fun close() { privileged { display?.release(); display = null; id = -1 } }
-    override fun destroy() { close(); System.exit(0) }
+    override fun destroy() { close(); callbacks.quitSafely(); System.exit(0) }
 }

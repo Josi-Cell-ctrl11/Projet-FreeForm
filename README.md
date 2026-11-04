@@ -5,13 +5,22 @@ Prototype Android de fenêtres flottantes inspirées de XOS, en Kotlin. Le lance
 ## Télécharger et essayer
 
 1. Ouvrir **Actions → APK Android** et sélectionner le dernier lancement réussi (vert).
-2. Dans **Artifacts**, télécharger **FloatX-APK**, extraire le ZIP et installer `FloatX-0.1.0-debug.apk` sur le téléphone.
+2. Dans **Artifacts**, télécharger **FloatX-APK**, extraire le ZIP et installer `FloatX-0.1.1-debug.apk` sur le téléphone.
 3. Ouvrir FloatX et autoriser **l’affichage par-dessus les autres applications**.
 4. Choisir **Essayer les gestes — démo**.
 5. Déplacer la fenêtre par sa poignée, tirer le coin inférieur droit, réduire avec **−**, puis toucher la bulle pour restaurer. La bulle se déplace et revient sur le bord.
 6. **×** ferme la session. La notification et le bouton **Fermer toutes les fenêtres** permettent aussi de tout arrêter.
 
 L’APK est signé avec une clé de développement temporaire de GitHub Actions. Pour le moment, une nouvelle compilation peut nécessiter de désinstaller l’ancienne version. Une signature stable sera ajoutée avant les versions distribuées durablement.
+
+## Correctif 0.1.1
+
+- Accélération graphique explicite de la fenêtre superposée : nécessaire pour créer la surface TextureView.
+- État distinct pour la connexion Shizuku, la préparation de la surface et l’ouverture de l’application.
+- Au bout de 25 secondes, diagnostic D01–D04 au lieu d’une attente infinie. Les connexions tardives après échec ou fermeture ne relancent pas l’application.
+- Le moteur système utilise un thread de callbacks dédié et accepte les deux formes de construction Shizuku.
+
+Si la connexion reste bloquée, vérifier **Shizuku → Applications autorisées → FloatX**, puis fermer et relancer la fenêtre. Envoyer une capture du code de diagnostic si le problème persiste. Le correctif graphique est une cause probable identifiée dans le code, pas encore une résolution confirmée sur le téléphone.
 
 ## Deux modes clairement distincts
 
