@@ -20,6 +20,7 @@ class FloatingService : Service() {
     private val io = Executors.newSingleThreadExecutor()
     private lateinit var wm: WindowManager
     private val sessions=linkedMapOf<String,WindowSession>()
+    private var frontKey:String?=null
     private var dock:View?=null
     private var dockParams=WindowManager.LayoutParams()
     private val pins by lazy { getSharedPreferences("dock",MODE_PRIVATE) }
@@ -59,6 +60,7 @@ class FloatingService : Service() {
     }
     private fun closeSession(key:String) {
         sessions.remove(key)?.dispose()
+        if(frontKey==key) frontKey=null
         if(sessions.isEmpty() && dock==null) stopSelf()
     }
     private fun d(value:Int)=Ui.dp(this,value)
@@ -115,6 +117,9 @@ class FloatingService : Service() {
 
     private inner class WindowSession(private val key:String,private val component:String?,private val label:String) {
     private var root: FrameLayout? = null
+    private var menu:View?=null
+    private var retainingTexture=false
+    private val raiseRequest=Runnable { raise() }
     private var bubble: View? = null
     private var params = WindowManager.LayoutParams()
     private var bubbleParams = WindowManager.LayoutParams()
@@ -168,36 +173,37 @@ class FloatingService : Service() {
     private fun createWindow() {
         measureScreen()
         params=windowParams((screenW*.88).toInt(),(screenH*.66).toInt()).apply { x=d(12)+(sessions.size-1)*d(20); y=d(50)+(sessions.size-1)*d(32) }
-        val panel=FrameLayout(this@FloatingService).apply {
+        val panel=object:FrameLayout(this@FloatingService) {
+            override fun dispatchTouchEvent(event:MotionEvent):Boolean {
+                if(event.actionMasked==MotionEvent.ACTION_DOWN) {
+                    sessions.values.forEach { it.dismissMenu() }
+                }
+                val handled=super.dispatchTouchEvent(event)
+                // Reorder after the complete gesture: never cancel the app's DOWN/UP sequence.
+                if(event.actionMasked==MotionEvent.ACTION_UP || event.actionMasked==MotionEvent.ACTION_CANCEL) {
+                    main.removeCallbacks(raiseRequest);main.post(raiseRequest)
+                }
+                return handled
+            }
+        }.apply {
             background=Ui.rounded(this@FloatingService,Color.WHITE,12)
-            clipToOutline=true; elevation=d(10).toFloat()
+            clipToOutline=true;elevation=d(10).toFloat()
         }
         root=panel
         val column=LinearLayout(this@FloatingService).apply { orientation=LinearLayout.VERTICAL }
         panel.addView(column,FrameLayout.LayoutParams(-1,-1))
-        val header=LinearLayout(this@FloatingService).apply {
-            gravity=Gravity.CENTER_VERTICAL;setPadding(d(8),0,d(2),0)
-            setBackgroundColor(0xFFF7F8F5.toInt())
-        }
-        val drag=Ui.text(this@FloatingService,label,12f,Ui.MUTED).apply {
-            maxLines=1;ellipsize=android.text.TextUtils.TruncateAt.END
-            gravity=Gravity.CENTER_VERTICAL
-            layoutParams=LinearLayout.LayoutParams(0,d(36),1f)
-            contentDescription="Glisser pour déplacer $label"
-        }
-        drag.setOnTouchListener(gesture { dx,dy -> params.x+=dx;params.y+=dy;updateWindow() })
-        header.addView(drag)
-        fun control(symbol:String,description:String,action:()->Unit) {
-            header.addView(Ui.icon(this@FloatingService,symbol,description,action).apply {
-                textSize=19f;layoutParams=LinearLayout.LayoutParams(d(32),d(36))
-            })
-        }
-        if(component!=null) control("‹","Retour dans l’application") { remote { back() } }
-        control("−","Réduire en bulle") { minimize() }
-        control("⛶","Agrandir ou restaurer la fenêtre") { toggleSize() }
-        control("×","Fermer la fenêtre") { closeSession(key) }
-        column.addView(header,LinearLayout.LayoutParams(-1,d(36)))
         if(component==null) createDemo(column) else createAppSurface(column)
+        val more=Ui.text(this@FloatingService,"⋯",22f,Ui.INK,true).apply {
+            gravity=Gravity.CENTER
+            background=Ui.rounded(this@FloatingService,0xDCFFFFFF.toInt(),14)
+            contentDescription="Commandes de $label ; glisser pour déplacer"
+        }
+        more.setOnTouchListener(gesture(onClick={ showMenu() }) { dx,dy ->
+            dismissMenu();params.x+=dx;params.y+=dy;updateWindow()
+        })
+        panel.addView(more,FrameLayout.LayoutParams(d(44),d(30),Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply {
+            topMargin=d(3)
+        })
         // No footer: the app extends to the rounded bottom edge. Keep the resize gesture.
         val resize=View(this@FloatingService).apply {
             contentDescription="Coin inférieur droit : glisser pour redimensionner"
@@ -207,7 +213,55 @@ class FloatingService : Service() {
         })
         panel.addView(resize,FrameLayout.LayoutParams(d(24),d(24),Gravity.BOTTOM or Gravity.END))
         wm.addView(panel,params)
+        frontKey=key
         updateWindow()
+    }
+
+    fun dismissMenu() {
+        menu?.let { if(it.isAttachedToWindow) wm.removeView(it) };menu=null
+    }
+    private fun showMenu() {
+        if(menu!=null) { dismissMenu();return }
+        raise()
+        sessions.values.forEach { it.dismissMenu() }
+        val list=LinearLayout(this@FloatingService).apply {
+            orientation=LinearLayout.VERTICAL;setPadding(d(8),d(6),d(8),d(6))
+            background=Ui.rounded(this@FloatingService,Color.WHITE,12);elevation=d(14).toFloat()
+        }
+        fun item(title:String,action:()->Unit) {
+            list.addView(Ui.text(this@FloatingService,title,14f,Ui.INK).apply {
+                gravity=Gravity.CENTER_VERTICAL;setPadding(d(12),0,d(12),0)
+                layoutParams=LinearLayout.LayoutParams(-1,d(44))
+                setOnClickListener { dismissMenu();action() }
+            })
+        }
+        item("Réduire en bulle") { minimize() }
+        item(if(full) "Restaurer la taille" else "Agrandir") { toggleSize() }
+        if(component!=null) item("Retour dans l’application") { remote { back() } }
+        item("Fermer la fenêtre") { closeSession(key) }
+        item("Masquer les commandes") { }
+        val height=list.childCount*d(44)+d(12)
+        val box=WindowGeometry.clamp(WindowBox(params.x+(params.width-d(210))/2,params.y+d(36),d(210),height),
+            screenW,screenH,d(180),height.coerceAtMost(screenH))
+        menu=list
+        wm.addView(list,windowParams(box.width,box.height).apply { x=box.x;y=box.y })
+    }
+    private fun raise() {
+        val panel=root ?: return
+        if(minimized || !panel.isAttachedToWindow || frontKey==key) return
+        // WindowManager order, not View.elevation: these are separate overlay windows.
+        // Preserve the producer and VirtualDisplay while moving this overlay to the top.
+        val retained=texture?.surfaceTexture
+        retainingTexture=retained!=null
+        try {
+            wm.removeViewImmediate(panel)
+            if(retained!=null) texture?.setSurfaceTexture(retained)
+            wm.addView(panel,params)
+            frontKey=key
+        } catch(e:Exception) {
+            toast("Premier plan indisponible : ${e.message}")
+            if(!panel.isAttachedToWindow) { retainingTexture=false;closeSession(key) }
+        } finally { retainingTexture=false }
     }
 
     private fun createDemo(panel: LinearLayout) {
@@ -263,7 +317,7 @@ class FloatingService : Service() {
             }
             override fun onSurfaceTextureSizeChanged(st:SurfaceTexture,w:Int,h:Int) { scheduleResize() }
             override fun onSurfaceTextureUpdated(st:SurfaceTexture) {}
-            override fun onSurfaceTextureDestroyed(st:SurfaceTexture):Boolean = true
+            override fun onSurfaceTextureDestroyed(st:SurfaceTexture):Boolean = !retainingTexture
         }
         view.setOnTouchListener { _,event ->
             if (ready) {
@@ -340,7 +394,8 @@ class FloatingService : Service() {
     @SuppressLint("ClickableViewAccessibility")
     private fun minimize() {
         if(minimized) return
-        minimized=true
+        dismissMenu();minimized=true
+        if(frontKey==key) frontKey=null
         getSystemService(InputMethodManager::class.java).hideSoftInputFromWindow(root?.windowToken,0)
         // Keep the texture attached while minimized; removing it would destroy the display surface.
         params.alpha=0f
@@ -373,6 +428,7 @@ class FloatingService : Service() {
         bubble?.let { wm.removeView(it) };bubble=null;minimized=false
         params.alpha=1f;params.flags=params.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
         root?.let { wm.updateViewLayout(it,params) }
+        raise()
     }
     @SuppressLint("ClickableViewAccessibility")
     private fun gesture(onEnd:()->Unit={},onClick:()->Unit={},move:(Int,Int)->Unit):View.OnTouchListener {
@@ -398,22 +454,24 @@ class FloatingService : Service() {
     }
     private fun toast(value:String) { Toast.makeText(this@FloatingService,value,Toast.LENGTH_LONG).show() }
     fun configurationChanged() {
-        measureScreen();updateWindow();scheduleResize()
+        dismissMenu();measureScreen();updateWindow();scheduleResize()
         bubble?.let { bubbleParams.x=(screenW-d(60)).coerceAtLeast(0);bubbleParams.y=bubbleParams.y.coerceIn(0,(screenH-d(56)).coerceAtLeast(0));wm.updateViewLayout(it,bubbleParams) }
     }
     fun dispose() {
+        main.removeCallbacks(raiseRequest);dismissMenu()
         main.removeCallbacks(resizeUpdate)
         main.removeCallbacks(startupTimeout)
         failed=true
         generation++;ready=false
         val target=host;host=null
         val ownedSurface=surface;surface=null
+        val detachedTexture=if(root?.isAttachedToWindow!=true) texture?.surfaceTexture else null
         bubble?.let { wm.removeView(it) };bubble=null
-        root?.let { wm.removeView(it) };root=null
+        root?.let { if(it.isAttachedToWindow) wm.removeView(it) };root=null
         io.execute {
             try { target?.close() } catch (_:Exception) { }
             finally {
-                ownedSurface?.release()
+                ownedSurface?.release();detachedTexture?.release()
             }
         }
 

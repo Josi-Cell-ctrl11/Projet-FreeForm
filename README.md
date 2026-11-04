@@ -1,3 +1,9 @@
+# FloatX 0.4.2 — commandes ⋯ et premier plan
+
+La barre supérieure est supprimée. Un bouton ⋯ est superposé en haut, au centre du contenu : appuyer ouvre les commandes (réduire, agrandir/restaurer, retour, fermer), le faire glisser déplace la fenêtre. Les coins restent arrondis à 12 dp.
+
+Toucher une fenêtre la place devant les autres une fois le geste terminé, en conservant son écran virtuel et sa SurfaceTexture. Une bulle ou un raccourci restaure aussi la fenêtre au premier plan. Le changement d’ordre est effectué entre fenêtres WindowManager, sans relancer l’application. À valider sur XOS : alternance de deux fenêtres, continuité d’un défilement et clavier externe après changement de priorité.
+
 # FloatX 0.4.1 — cadre discret
 
 La barre inférieure FLOATX est supprimée. Le contenu occupe tout le bas du cadre, avec des coins de 12 dp. La barre supérieure passe de 48 à 36 dp et le bouton retour rejoint les commandes du haut. Le redimensionnement reste disponible en glissant le coin inférieur droit, sans triangle ni bande inférieure. Les fenêtres multiples, raccourcis et réglages du clavier de 0.4.0 sont conservés.
