@@ -7,10 +7,9 @@ android {
         applicationId = "com.josias.floatx"
         minSdk = 30
         targetSdk = 35
-        versionCode = 2
-        versionName = "0.1.1-prototype"
+        versionCode = 3
+        versionName = "0.2.0-native"
     }
-    buildFeatures { aidl = true }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -21,7 +20,6 @@ android {
 }
 
 dependencies {
-    implementation("dev.rikka.shizuku:api:13.1.5")
-    implementation("dev.rikka.shizuku:provider:13.1.5")
+    implementation("org.lsposed.hiddenapibypass:hiddenapibypass:6.1")
     testImplementation("junit:junit:4.13.2")
 }
