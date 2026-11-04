@@ -1,3 +1,11 @@
+# FloatX 0.4.4 — Retour et perte de Shizuku
+
+Le panneau de réglages est retiré de l’historique après ouverture d’une fenêtre ou de la barre. Une fenêtre auxiliaire transparente de 1 pixel capte Retour sur l’écran principal lorsque l’utilisateur sélectionne une application flottante ; la commande est injectée dans son écran virtuel. Cette fenêtre n’est pas un éditeur et ne recouvre pas le clavier. La capture est retirée quand la fenêtre sélectionnée est réduite, fermée, ou quand Shizuku s’arrête. Le menu ⋯ conserve sa commande Retour.
+
+Le rendu et les commandes utilisent des Binder locaux. FloatX ne demande pas la permission INTERNET. Une coupure Wi-Fi peut toutefois s’accompagner d’un arrêt de Shizuku démarré via le débogage sans fil, selon le système. Cette version détecte la perte du Binder, affiche la cause et permet de recréer une session en touchant son raccourci après redémarrage de Shizuku. Elle ne garantit pas de maintenir Shizuku actif si XOS l’arrête. Conserver le débogage USB et les options développeur activés et autoriser Shizuku en arrière-plan, conformément à https://shizuku.rikka.app/guide/setup/.
+
+À vérifier sur téléphone : Retour par geste et par bouton dans une conversation, clavier externe, réduction de toutes les fenêtres, puis ouverture de l’appli du dessous ; coupure du Wi-Fi en contrôlant l’état Shizuku.
+
 # FloatX 0.4.3 — redimensionnement aux quatre coins
 
 Glisser depuis n’importe lequel des quatre coins ajuste la taille. Le coin opposé reste fixe, y compris lorsque la taille minimum ou une limite de l’écran est atteinte. Les zones de prise restent invisibles (24 dp), sans ajouter de barre au cadre. Le menu ⋯, les coins arrondis et le passage au premier plan sont conservés.

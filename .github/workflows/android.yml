@@ -37,9 +37,9 @@ jobs:
       - name: Préparer l’APK
         run: |
           mkdir -p dist
-          cp app/build/outputs/apk/debug/app-debug.apk dist/FloatX-0.4.3-debug.apk
+          cp app/build/outputs/apk/debug/app-debug.apk dist/FloatX-0.4.4-debug.apk
           cd dist
-          sha256sum FloatX-0.4.3-debug.apk > SHA256SUMS.txt
+          sha256sum FloatX-0.4.4-debug.apk > SHA256SUMS.txt
       - name: Télécharger l’APK depuis les artefacts
         uses: actions/upload-artifact@v4
         with:

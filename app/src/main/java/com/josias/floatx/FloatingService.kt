@@ -21,6 +21,27 @@ class FloatingService : Service() {
     private lateinit var wm: WindowManager
     private val sessions=linkedMapOf<String,WindowSession>()
     private var frontKey:String?=null
+    private var backKey:String?=null
+    private var backRouter:BackRouter?=null
+    private val binderDead=rikka.shizuku.Shizuku.OnBinderDeadListener {
+        main.post {
+            releaseBackFocus()
+            sessions.values.forEach { it.connectionLost() }
+            toast("Shizuku s’est arrêté. Relance-le, puis rouvre l’appli depuis la barre FloatX. Le rendu est local.")
+        }
+    }
+    private fun activateBack(key:String) {
+        if(Build.VERSION.SDK_INT<33) return
+        backKey=key
+        if(backRouter==null) backRouter=BackRouter(this,wm) {
+            sessions[backKey]?.navigateBack()
+        }
+        try { backRouter?.activate() } catch(e:RuntimeException) { toast("Retour système indisponible : utilise Retour dans ⋯.") }
+    }
+    private fun releaseBackFocus() {
+        if(Build.VERSION.SDK_INT>=33) backRouter?.hide()
+        backKey=null
+    }
     private var dock:View?=null
     private var dockParams=WindowManager.LayoutParams()
     private val pins by lazy { getSharedPreferences("dock",MODE_PRIVATE) }
@@ -28,6 +49,7 @@ class FloatingService : Service() {
     override fun onCreate() {
         super.onCreate()
         wm=getSystemService(WindowManager::class.java)
+        rikka.shizuku.Shizuku.addBinderDeadListener(binderDead)
         val channel = NotificationChannel("windows","Fenêtre flottante",NotificationManager.IMPORTANCE_LOW)
         getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
         val open = PendingIntent.getActivity(this,0,Intent(this,MainActivity::class.java),PendingIntent.FLAG_IMMUTABLE)
@@ -53,15 +75,19 @@ class FloatingService : Service() {
             toast("Ouvre FloatX pour démarrer et autoriser Shizuku.");return
         }
         val key=component ?: "demo"
-        sessions[key]?.let { it.restore();return }
+        sessions[key]?.let {
+            if(!it.isConnectionLost) { it.restore();return }
+            closeSession(key,keepService=true)
+        }
         val session=WindowSession(key,component,label)
         sessions[key]=session
         session.start()
     }
-    private fun closeSession(key:String) {
+    private fun closeSession(key:String,keepService:Boolean=false) {
+        if(backKey==key) releaseBackFocus()
         sessions.remove(key)?.dispose()
         if(frontKey==key) frontKey=null
-        if(sessions.isEmpty() && dock==null) stopSelf()
+        if(!keepService && sessions.isEmpty() && dock==null) stopSelf()
     }
     private fun d(value:Int)=Ui.dp(this,value)
     private fun toast(value:String) { Toast.makeText(this,value,Toast.LENGTH_LONG).show() }
@@ -109,6 +135,7 @@ class FloatingService : Service() {
         if(dock!=null) showDock()
     }
     override fun onDestroy() {
+        rikka.shizuku.Shizuku.removeBinderDeadListener(binderDead);releaseBackFocus()
         sessions.values.toList().forEach { it.dispose() };sessions.clear()
         dock?.let { wm.removeView(it) };dock=null
         io.shutdown();stopForeground(STOP_FOREGROUND_REMOVE);super.onDestroy()
@@ -118,6 +145,8 @@ class FloatingService : Service() {
     private inner class WindowSession(private val key:String,private val component:String?,private val label:String) {
     private var root: FrameLayout? = null
     private var menu:View?=null
+    var isConnectionLost=false
+        private set
     private var retainingTexture=false
     private val raiseRequest=Runnable { raise() }
     private var bubble: View? = null
@@ -176,6 +205,7 @@ class FloatingService : Service() {
         val panel=object:FrameLayout(this@FloatingService) {
             override fun dispatchTouchEvent(event:MotionEvent):Boolean {
                 if(event.actionMasked==MotionEvent.ACTION_DOWN) {
+                    if(component!=null && !isConnectionLost) activateBack(key)
                     sessions.values.forEach { it.dismissMenu() }
                 }
                 val handled=super.dispatchTouchEvent(event)
@@ -227,9 +257,20 @@ class FloatingService : Service() {
         }
         wm.addView(panel,params)
         frontKey=key
+        if(component!=null) activateBack(key)
         updateWindow()
     }
 
+    fun connectionLost() {
+        if(component==null) return
+        isConnectionLost=true;generation++;failed=true;ready=false
+        main.removeCallbacks(startupTimeout)
+        status?.apply { text="Shizuku arrêté\nRelance Shizuku, puis touche l’icône de cette appli dans la barre FloatX pour la rouvrir.";visibility=View.VISIBLE }
+    }
+    fun navigateBack() {
+        if(menu!=null) { dismissMenu();return }
+        if(!isConnectionLost && ready && !minimized) remote { back() }
+    }
     fun dismissMenu() {
         menu?.let { if(it.isAttachedToWindow) wm.removeView(it) };menu=null
     }
@@ -407,6 +448,7 @@ class FloatingService : Service() {
     @SuppressLint("ClickableViewAccessibility")
     private fun minimize() {
         if(minimized) return
+        if(backKey==key) releaseBackFocus()
         dismissMenu();minimized=true
         if(frontKey==key) frontKey=null
         getSystemService(InputMethodManager::class.java).hideSoftInputFromWindow(root?.windowToken,0)
@@ -442,6 +484,7 @@ class FloatingService : Service() {
         params.alpha=1f;params.flags=params.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
         root?.let { wm.updateViewLayout(it,params) }
         raise()
+        if(component!=null && !isConnectionLost) activateBack(key)
     }
     @SuppressLint("ClickableViewAccessibility")
     private fun gesture(onEnd:()->Unit={},onClick:()->Unit={},move:(Int,Int)->Unit):View.OnTouchListener {
@@ -462,6 +505,7 @@ class FloatingService : Service() {
         }
     }
     private fun fail(message:String) {
+        if(isConnectionLost) return
         failed=true;main.removeCallbacks(startupTimeout)
         ready=false;status?.apply { text=message;visibility=View.VISIBLE };toast(message)
     }
