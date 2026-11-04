@@ -1,5 +1,6 @@
 package com.josias.floatx
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
@@ -26,6 +27,8 @@ class WindowHost(@Suppress("UNUSED_PARAMETER") context: Context) : IWindowHost.S
         try { return block() } finally { Binder.restoreCallingIdentity(token) }
     }
 
+    // Flag 256 is the AOSP system flag DESTROY_CONTENT_ON_REMOVAL, absent from the public SDK IntDef.
+    @SuppressLint("WrongConstant")
     @Synchronized override fun open(surface: Surface, width: Int, height: Int, dpi: Int, component: String): Int = privileged {
         require(component.matches(Regex("[A-Za-z0-9_.$]+/[A-Za-z0-9_.$]+"))) { "Composant invalide" }
         close()
@@ -39,7 +42,8 @@ class WindowHost(@Suppress("UNUSED_PARAMETER") context: Context) : IWindowHost.S
         // PUBLIC | PRESENTATION | OWN_CONTENT_ONLY | DESTROY_CONTENT_ON_REMOVAL.
         // No mirroring, secure-content capture or trusted-display permission is requested.
         display = manager.createVirtualDisplay("FloatX", width, height, dpi, surface,
-            1 or 2 or 8 or 256, null, main)
+            DisplayManager.VIRTUAL_DISPLAY_FLAG_PUBLIC or DisplayManager.VIRTUAL_DISPLAY_FLAG_PRESENTATION or
+                DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY or 256, null, main)
             ?: error("XOS a refusé la création de l'écran virtuel")
         id = display!!.display.displayId
         try {
