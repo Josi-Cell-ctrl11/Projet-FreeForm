@@ -1,3 +1,7 @@
+# FloatX 0.4.3 — redimensionnement aux quatre coins
+
+Glisser depuis n’importe lequel des quatre coins ajuste la taille. Le coin opposé reste fixe, y compris lorsque la taille minimum ou une limite de l’écran est atteinte. Les zones de prise restent invisibles (24 dp), sans ajouter de barre au cadre. Le menu ⋯, les coins arrondis et le passage au premier plan sont conservés.
+
 # FloatX 0.4.2 — commandes ⋯ et premier plan
 
 La barre supérieure est supprimée. Un bouton ⋯ est superposé en haut, au centre du contenu : appuyer ouvre les commandes (réduire, agrandir/restaurer, retour, fermer), le faire glisser déplace la fenêtre. Les coins restent arrondis à 12 dp.

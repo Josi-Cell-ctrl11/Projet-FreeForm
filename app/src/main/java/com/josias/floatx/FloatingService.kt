@@ -204,14 +204,27 @@ class FloatingService : Service() {
         panel.addView(more,FrameLayout.LayoutParams(d(44),d(30),Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply {
             topMargin=d(3)
         })
-        // No footer: the app extends to the rounded bottom edge. Keep the resize gesture.
-        val resize=View(this@FloatingService).apply {
-            contentDescription="Coin inférieur droit : glisser pour redimensionner"
+        // Invisible corner handles preserve the frameless app surface.
+        for(corner in ResizeCorner.entries) {
+            val resize=View(this@FloatingService).apply {
+                contentDescription=when(corner) {
+                    ResizeCorner.TOP_LEFT -> "Coin supérieur gauche : redimensionner"
+                    ResizeCorner.TOP_RIGHT -> "Coin supérieur droit : redimensionner"
+                    ResizeCorner.BOTTOM_LEFT -> "Coin inférieur gauche : redimensionner"
+                    ResizeCorner.BOTTOM_RIGHT -> "Coin inférieur droit : redimensionner"
+                }
+            }
+            resize.setOnTouchListener(gesture(onEnd={ resizeDisplay() }) { dx,dy ->
+                dismissMenu();full=false
+                val box=WindowGeometry.resize(WindowBox(params.x,params.y,params.width,params.height),
+                    corner,dx,dy,screenW,screenH,d(180),d(200))
+                params.x=box.x;params.y=box.y;params.width=box.width;params.height=box.height
+                updateWindow();scheduleResize()
+            })
+            val gravity=(if(corner.top) Gravity.TOP else Gravity.BOTTOM) or
+                (if(corner.left) Gravity.START else Gravity.END)
+            panel.addView(resize,FrameLayout.LayoutParams(d(24),d(24),gravity))
         }
-        resize.setOnTouchListener(gesture(onEnd={ resizeDisplay() }) { dx,dy ->
-            full=false;params.width+=dx;params.height+=dy;updateWindow();scheduleResize()
-        })
-        panel.addView(resize,FrameLayout.LayoutParams(d(24),d(24),Gravity.BOTTOM or Gravity.END))
         wm.addView(panel,params)
         frontKey=key
         updateWindow()
