@@ -193,7 +193,7 @@ class FloatingService : Service() {
                 val matrix=Matrix().apply { setScale(renderW.toFloat()/view.width.coerceAtLeast(1),renderH.toFloat()/view.height.coerceAtLeast(1)) }
                 copy.transform(matrix)
                 val target=host
-                io.execute { try { target?.touch(copy) } catch(e:Exception) { main.post { fail("Tactile indisponible : ${e.message}") } } finally { copy.recycle() } }
+                io.execute { try { check(target?.touch(copy) == true) { "Le système a refusé le tactile sur cet écran" } } catch(e:Exception) { main.post { fail("Tactile indisponible : ${e.message}") } } finally { copy.recycle() } }
             }
             true
         }

@@ -3,6 +3,7 @@ package com.josias.floatx
 import android.content.Context
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
+import android.os.Binder
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -20,7 +21,12 @@ class WindowHost(@Suppress("UNUSED_PARAMETER") context: Context) : IWindowHost.S
     private var display: VirtualDisplay? = null
     private var id = -1
 
-    @Synchronized override fun open(surface: Surface, width: Int, height: Int, dpi: Int, component: String): Int {
+    private inline fun <T> privileged(block: () -> T): T {
+        val token = Binder.clearCallingIdentity()
+        try { return block() } finally { Binder.restoreCallingIdentity(token) }
+    }
+
+    @Synchronized override fun open(surface: Surface, width: Int, height: Int, dpi: Int, component: String): Int = privileged {
         require(component.matches(Regex("[A-Za-z0-9_.$]+/[A-Za-z0-9_.$]+"))) { "Composant invalide" }
         close()
         // Use the shell package for attribution: the process has shell UID, not app UID.
@@ -45,11 +51,11 @@ class WindowHost(@Suppress("UNUSED_PARAMETER") context: Context) : IWindowHost.S
             }
             val output = process.inputStream.bufferedReader().readText()
             check(process.exitValue() == 0 && !output.contains("Error:") && !output.contains("Exception")) { output }
-            return id
+            id
         } catch (e: Exception) { close(); throw IllegalStateException(e.message, e) }
     }
 
-    private fun inject(event: InputEvent) {
+    private fun inject(event: InputEvent) = privileged {
         check(id >= 0) { "Aucune fenêtre active" }
         InputEvent::class.java.getMethod("setDisplayId", Int::class.javaPrimitiveType).invoke(event, id)
         val clazz = try { Class.forName("android.hardware.input.InputManagerGlobal") }
@@ -61,12 +67,12 @@ class WindowHost(@Suppress("UNUSED_PARAMETER") context: Context) : IWindowHost.S
     }
 
     @Synchronized override fun resize(width: Int, height: Int, dpi: Int) {
-        display?.resize(width, height, dpi)
+        privileged { display?.resize(width, height, dpi) }
     }
 
-    @Synchronized override fun touch(event: MotionEvent) {
-        try { if (id >= 0) inject(event) }
-        catch (e: Exception) { android.util.Log.e("FloatXHost", "Input rejected", e) }
+    @Synchronized override fun touch(event: MotionEvent): Boolean {
+        return try { inject(event); true }
+        catch (e: Exception) { android.util.Log.e("FloatXHost", "Input rejected", e); false }
         finally { event.recycle() }
     }
 
@@ -85,6 +91,6 @@ class WindowHost(@Suppress("UNUSED_PARAMETER") context: Context) : IWindowHost.S
         }
     }
 
-    @Synchronized override fun close() { display?.release(); display = null; id = -1 }
+    @Synchronized override fun close() { privileged { display?.release(); display = null; id = -1 } }
     override fun destroy() { close(); System.exit(0) }
 }
