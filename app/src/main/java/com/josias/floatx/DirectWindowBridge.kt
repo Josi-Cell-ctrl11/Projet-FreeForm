@@ -27,6 +27,12 @@ class DirectWindowBridge(private val context: Context) {
     private var display: VirtualDisplay? = null
     private var displayId = -1
     private var input: Any? = null
+    var trustedDisplay = false
+        private set
+    var imeLocalRequested = false
+        private set
+    var diagnostic = ""
+        private set
     @Volatile var stage = "S00 · préparation"
         private set
 
@@ -56,24 +62,56 @@ class DirectWindowBridge(private val context: Context) {
             val globalClass=Class.forName("android.hardware.display.DisplayManagerGlobal")
             // Separate manager: never replace the app's DisplayManagerGlobal singleton.
             val global=HiddenApiBypass.newInstance(globalClass,dm)
-            val config=VirtualDisplayConfig.Builder("FloatX",width,height,dpi)
-                .setFlags(1 or 2 or 8 or 256).setSurface(surface).build()
             val shellContext=context.createPackageContext("com.android.shell",0)
             val create=methods(globalClass).firstOrNull { method ->
                 method.name=="createVirtualDisplay" && method.parameterTypes.firstOrNull()==Context::class.java &&
                     method.parameterTypes.contains(VirtualDisplayConfig::class.java)
             } ?: error("Signature de création d’écran non prise en charge")
-            val args=create.parameterTypes.map { type -> when {
-                type==Context::class.java -> shellContext
-                type==VirtualDisplayConfig::class.java -> config
-                Executor::class.java.isAssignableFrom(type) -> Executor { command -> command.run() }
-                type==Int::class.javaPrimitiveType -> 0
-                else -> null
-            } }.toTypedArray()
-            step("S02 · création de l’écran dans le cadre…")
             create.isAccessible=true
-            display=create.invoke(global,*args) as? VirtualDisplay ?: error("Android a refusé l’écran virtuel")
+            val identity=Shizuku.getUid()
+            val permission=context.checkPermission("android.permission.ADD_TRUSTED_DISPLAY",-1,identity)
+            val refusals=mutableListOf<String>()
+            var actualFlags=DisplayProfiles.BASE
+            for(flags in DisplayProfiles.creationOrder) {
+                step("S02 · création de l’écran ${if(DisplayProfiles.trusted(flags)) "TRUSTED" else "standard"}…")
+                val builder=VirtualDisplayConfig.Builder("FloatX",width,height,dpi).setFlags(flags).setSurface(surface)
+                if(DisplayProfiles.trusted(flags)) {
+                    try { call(VirtualDisplayConfig.Builder::class.java,builder,"setIgnoreActivitySizeRestrictions",true) }
+                    catch(_:ReflectiveOperationException) { /* Optional API varies with Android/XOS. */ }
+                }
+                val config=builder.build()
+                val args=create.parameterTypes.map { type -> when {
+                    type==Context::class.java -> shellContext
+                    type==VirtualDisplayConfig::class.java -> config
+                    Executor::class.java.isAssignableFrom(type) -> Executor { command -> command.run() }
+                    type==Int::class.javaPrimitiveType -> 0
+                    else -> null
+                } }.toTypedArray()
+                try {
+                    display=create.invoke(global,*args) as? VirtualDisplay ?: error("Android a refusé l’écran virtuel")
+                    actualFlags=flags
+                    break
+                } catch(e:InvocationTargetException) {
+                    val cause=e.targetException
+                    if(cause !is SecurityException || flags==DisplayProfiles.BASE) throw cause
+                    refusals.add("$flags : ${cause.message ?: "permission refusée"}")
+                }
+            }
             displayId=display!!.display.displayId
+            trustedDisplay=DisplayProfiles.trusted(actualFlags)
+            var imeNote="clavier local non demandé (écran standard)"
+            if(trustedDisplay) {
+                try {
+                    val window=service("window","android.view.IWindowManager\$Stub")
+                    call(Class.forName("android.view.IWindowManager"),window,"setDisplayImePolicy",displayId,0)
+                    imeLocalRequested=true
+                    imeNote="clavier local demandé ; affichage à confirmer"
+                } catch(e:Exception) { imeNote="clavier local refusé : ${e.message ?: e.javaClass.simpleName}" }
+            }
+            diagnostic="Écran : ${if(trustedDisplay) "TRUSTED" else "standard"} · flags=$actualFlags · UID=$identity\n"+
+                "ADD_TRUSTED_DISPLAY : ${if(permission==android.content.pm.PackageManager.PERMISSION_GRANTED) "accordée" else "non accordée"}\n"+
+                imeNote+(if(refusals.isNotEmpty()) "\nReplis : ${refusals.joinToString(" ; ")}" else "")
+            NativeFreeformLauncher.record(context,diagnostic)
             step("S03 · ouverture de l’application…")
             val task=service("activity_task","android.app.IActivityTaskManager\$Stub")
             val taskClass=Class.forName("android.app.IActivityTaskManager")
@@ -90,7 +128,7 @@ class DirectWindowBridge(private val context: Context) {
             check(result>=0) { "Android a refusé le lancement (code $result)" }
             step("S04 · connexion du tactile…")
             input=service("input","android.hardware.input.IInputManager\$Stub")
-            step("S05 · fenêtre prête")
+            step("S05 · fenêtre prête (${if(trustedDisplay) "TRUSTED" else "standard"})")
             return displayId
         } catch(e:Throwable) {
             val cause=if(e is InvocationTargetException) e.targetException else e
@@ -111,12 +149,6 @@ class DirectWindowBridge(private val context: Context) {
     }
     @Synchronized fun touch(event:MotionEvent):Boolean { inject(event);return true }
     @Synchronized fun resize(width:Int,height:Int,dpi:Int) { display?.resize(width,height,dpi) }
-    @Synchronized fun sendText(text:String) {
-        require(text.length<=1000) { "1000 caractères maximum" }
-        val keys=KeyCharacterMap.load(KeyCharacterMap.VIRTUAL_KEYBOARD).getEvents(text.toCharArray())
-            ?: error("Caractères non pris en charge par la saisie de test")
-        keys.forEach { inject(it) }
-    }
     @Synchronized fun back() {
         val now=SystemClock.uptimeMillis()
         for(action in intArrayOf(KeyEvent.ACTION_DOWN,KeyEvent.ACTION_UP)) inject(KeyEvent(now,now,action,KeyEvent.KEYCODE_BACK,
@@ -124,7 +156,7 @@ class DirectWindowBridge(private val context: Context) {
     }
     @Synchronized fun close() {
         val previous=display
-        display=null;displayId=-1;input=null
+        display=null;displayId=-1;input=null;trustedDisplay=false;imeLocalRequested=false
         try { previous?.release() } catch(_:Exception) { }
     }
 }

@@ -1,16 +1,16 @@
-# FloatX 0.3 — cadre arrondi avec Shizuku direct
+# FloatX 0.3.1 — cadre arrondi avec Shizuku direct
 
 Cette version remet les vraies applications dans le cadre FloatX : coins arrondis, poignée de déplacement, coin de redimensionnement, agrandissement et réduction en bulle. Le moteur 0.1 qui attendait un `UserService` Shizuku est remplacé par des **appels Binder directs** via `ShizukuBinderWrapper`.
 
 ## Installer et essayer
 
 1. Télécharger **FloatX-APK** dans le dernier lancement réussi de **Actions → APK Android**.
-2. Décompresser, désinstaller l’ancien FloatX et installer `FloatX-0.3.0-debug.apk` (les APK debug n’ont pas encore de signature stable).
+2. Décompresser, désinstaller l’ancien FloatX et installer `FloatX-0.3.1-debug.apk` (les APK debug n’ont pas encore de signature stable).
 3. Dans FloatX, autoriser l’affichage flottant, démarrer Shizuku et autoriser FloatX.
 4. Utiliser **Ouvrir une appli dans le cadre FloatX**, puis choisir **Calculatrice**.
 5. Vérifier que le contenu s’affiche dans le cadre arrondi, que les touches répondent, puis essayer déplacement, redimensionnement et réduction/restauration en bulle.
 
-**Pas encore vérifié sur le téléphone de l’utilisateur.** Une compilation réussie n’atteste pas la compatibilité avec son firmware XOS. En cas de blocage, le code S01–S04 situe l’étape concernée ; envoyer une capture de ce message. L’attente est limitée à 25 secondes côté interface.
+**Calculatrice et le clavier ont été validés par l’utilisateur sur son téléphone.** La compatibilité des autres applis et du nouveau profil TRUSTED reste à confirmer sur son firmware XOS. En cas de blocage, le code S01–S04 situe l’étape concernée ; envoyer une capture de ce message. L’attente est limitée à 25 secondes côté interface.
 
 Le mode cadre direct nécessite Android 14 ou supérieur et une autorisation Shizuku active. Aucune modification de Shizuku, du firmware, du lanceur ou des permissions système persistantes n’est effectuée par FloatX.
 
@@ -32,7 +32,17 @@ Le composant à lancer provient du choix explicite de l’utilisateur ; aucune c
 
 Le cadre est dessiné par FloatX. Son contenu est une TextureView avec accélération graphique explicite. Réduire en bulle masque la fenêtre sans détacher sa surface ; restaurer la bulle réaffiche la même session, sans relancer l’application. XOS peut néanmoins interrompre des processus en arrière-plan.
 
-Le clavier natif dans l’écran virtuel reste expérimental. **⌨** ouvre la saisie de test : sélectionner un champ dans l’appli, saisir dans FloatX puis envoyer avec **➤**. Certains caractères, accents ou emojis peuvent être refusés par la table de clavier Android. Le bouton **‹** envoie Retour. Ce n’est pas un clavier complètement intégré.
+Le clavier Android est utilisé directement. À la demande de l’utilisateur, le bouton et le champ de saisie de secours ainsi que l’injection de texte correspondante ont été supprimés. Le bouton **‹** envoie Retour.
+
+### Profils d’affichage et permissions
+
+La création essaie dans cet ordre : **1803** (PUBLIC, PRESENTATION, OWN_CONTENT_ONLY, DESTROY_CONTENT_ON_REMOVAL, SHOULD_SHOW_SYSTEM_DECORATIONS, TRUSTED), puis **1291** (TRUSTED sans décorations) si Android refuse la première création, puis **267**, le profil standard qui fonctionnait pour Calculatrice. Seul un refus de sécurité lors de la création déclenche ces replis.
+
+La permission `ADD_TRUSTED_DISPLAY` de l’identité Shizuku est contrôlée à titre de diagnostic ; elle n’est ni accordée ni modifiée par FloatX. Une tentative effective confirme le profil accepté. Le résultat et les refus sont enregistrés localement et affichés à la réouverture de FloatX. En repli standard, un message l’indique explicitement.
+
+Si l’écran est TRUSTED, FloatX demande `IWindowManager.setDisplayImePolicy(displayId, LOCAL)` pour cette session. L’acceptation de cette demande ne garantit pas à elle seule que chaque clavier/fenêtre secondaire affichera son interface de la même manière sur tous les firmwares. Les décorations système ne remplacent pas cette politique IME. Les restrictions de taille et d’orientation sont ignorées sur les écrans TRUSTED quand l’API Android correspondante est disponible.
+
+Les APIs d’entrée `injectInputEventToTarget` et `injectInputEvent` restent prises en charge dans cet ordre. Les sources AOSP consultées contiennent encore les deux ; leur disponibilité n’est pas déduite uniquement du numéro de version Android.
 
 Les contenus protégés peuvent rester noirs. Certaines applis refusent les écrans secondaires. Le bouton d’agrandissement remplit l’espace disponible avec le cadre FloatX ; il ne transfère pas l’activité vers l’écran principal. Le panneau latéral et les badges de notification de la maquette ne sont pas implémentés.
 
@@ -45,7 +55,7 @@ Les contenus protégés peuvent rester noirs. Certaines applis refusent les écr
 
 JDK 17, Gradle 8.9, Android SDK 35, AGP 8.7.3 et Kotlin 2.0.21. `gradle --no-daemon testDebugUnitTest lintDebug assembleDebug`.
 
-Les tests couvrent les limites de fenêtre, les barres/découpes et la disposition des arguments de lancement Binder. Les signatures inconnues sont rejetées plutôt que devinées. La CI ne remplace pas les essais de rendu, tactile, clavier et maintien en arrière-plan sur XOS.
+Les tests couvrent les limites de fenêtre, les barres/découpes, la disposition des arguments de lancement Binder et les profils de repli (sans décorations sur un écran non trusted). Les signatures inconnues sont rejetées plutôt que devinées. La CI ne remplace pas les essais de rendu, tactile, clavier et maintien en arrière-plan sur XOS.
 
 ## Sources et licences
 

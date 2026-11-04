@@ -38,7 +38,6 @@ class FloatingService : Service() {
     private var ready = false
     private var surface: Surface? = null
     private var status: TextView? = null
-    private var keyboardRow: LinearLayout? = null
     private var failed = false
     private val startupTimeout = Runnable {
         if (!ready && !failed && root != null) {
@@ -119,9 +118,8 @@ class FloatingService : Service() {
         val footer=LinearLayout(this).apply { gravity=Gravity.CENTER_VERTICAL }
         if (component!=null) {
             footer.addView(Ui.icon(this,"‹","Retour dans l’application") { remote { back() } })
-            footer.addView(Ui.icon(this,"⌨","Ouvrir la saisie de test") { toggleKeyboard() })
         }
-        footer.addView(Ui.text(this,if(component==null) "DÉMO · conversation fictive" else "MODE EXPÉRIMENTAL",10f,Ui.MUTED).apply {
+        footer.addView(Ui.text(this,if(component==null) "DÉMO · conversation fictive" else "FLOATX",10f,Ui.MUTED).apply {
             setPadding(d(10),0,0,0); layoutParams=LinearLayout.LayoutParams(0,d(36),1f); gravity=Gravity.CENTER_VERTICAL
         })
         val resize=Ui.icon(this,"◢","Glisser pour redimensionner") {}.apply { setTextColor(Ui.GREEN) }
@@ -199,19 +197,6 @@ class FloatingService : Service() {
             }
             true
         }
-        val row=LinearLayout(this).apply { gravity=Gravity.CENTER_VERTICAL; visibility=View.GONE; setPadding(d(10),0,0,0) }
-        keyboardRow=row
-        val field=EditText(this).apply {
-            hint="Saisie de test";setSingleLine(true);textSize=14f
-            layoutParams=LinearLayout.LayoutParams(0,d(48),1f)
-        }
-        row.addView(field)
-        row.addView(Ui.icon(this,"➤","Envoyer le texte dans l’appli") {
-            val value=field.text.toString()
-            if(value.isNotEmpty()) remote { sendText(value) }
-            field.setText("")
-        })
-        panel.addView(row)
     }
 
     private fun maybeOpen() {
@@ -234,6 +219,7 @@ class FloatingService : Service() {
                 main.post { if(token==generation && !failed) {
                     main.removeCallbacks(startupTimeout)
                     ready=true;status?.visibility=View.GONE
+                    if(!target.trustedDisplay) toast("XOS a refusé l’écran TRUSTED. Mode standard conservé ; détails dans FloatX.")
                 } }
             } catch(e:Exception) { main.post { if(token==generation) fail("Ouverture refusée : ${e.message}") } }
         }
@@ -255,20 +241,6 @@ class FloatingService : Service() {
     private fun focusWindow() {
         params.flags=params.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv()
         root?.let { wm.updateViewLayout(it,params) }
-    }
-    private fun toggleKeyboard() {
-        val row=keyboardRow ?: return
-        if(row.visibility==View.VISIBLE) {
-            getSystemService(InputMethodManager::class.java).hideSoftInputFromWindow(root?.windowToken,0)
-            row.visibility=View.GONE
-            params.flags=params.flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-            root?.let { wm.updateViewLayout(it,params) }
-        } else {
-            row.visibility=View.VISIBLE;focusWindow()
-            val field=row.getChildAt(0) as EditText
-            field.requestFocus();field.postDelayed({ getSystemService(InputMethodManager::class.java).showSoftInput(field,InputMethodManager.SHOW_IMPLICIT) },150)
-        }
-        resizeDisplay()
     }
     private fun updateWindow() {
         val box=WindowGeometry.clamp(WindowBox(params.x,params.y,params.width,params.height),screenW,screenH,d(260),d(300))

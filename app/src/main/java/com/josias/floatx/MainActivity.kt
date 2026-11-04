@@ -32,16 +32,16 @@ class MainActivity : Activity() {
         val scroll=ScrollView(this).apply { setBackgroundColor(0xFFF8F7F2.toInt());isFillViewport=true }
         val page=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL;setPadding(d(24),d(24),d(24),d(36)) }
         scroll.addView(page)
-        page.addView(Ui.text(this,"FLOATX  /  0.3 · CADRE ARRONDI",12f,Ui.GREEN,true))
+        page.addView(Ui.text(this,"FLOATX  /  0.3.1 · CADRE ARRONDI",12f,Ui.GREEN,true))
         page.addView(Ui.text(this,"Tes applis,\nen flottant.",38f,bold=true).apply { setPadding(0,d(16),0,d(12)) })
-        page.addView(Ui.text(this,"Ton cadre FloatX, avec une connexion Shizuku directe.",17f,Ui.MUTED))
+        page.addView(Ui.text(this,"Tes applis dans des fenêtres flottantes.",17f,Ui.MUTED))
         val card=LinearLayout(this).apply {
             orientation=LinearLayout.VERTICAL;background=Ui.rounded(this@MainActivity,0xFFF0DEAB.toInt())
             setPadding(d(20),d(20),d(20),d(20))
             layoutParams=LinearLayout.LayoutParams(-1,-2).apply { topMargin=d(24);bottomMargin=d(20) }
         }
-        card.addView(Ui.text(this,"Le cadre que tu as validé.",23f,bold=true))
-        card.addView(Ui.text(this,"Fenêtre arrondie, déplacement, redimensionnement et réduction en bulle. Commence par Calculatrice pour valider la vraie appli.",15f).apply { setPadding(0,d(12),0,0) })
+        card.addView(Ui.text(this,"Tout à portée de main.",23f,bold=true))
+        card.addView(Ui.text(this,"Déplace tes fenêtres, ajuste leur taille et retrouve-les dans une bulle.",15f).apply { setPadding(0,d(12),0,0) })
         page.addView(card)
         status=Ui.text(this,"",13f,Ui.MUTED);page.addView(status)
         page.addView(Ui.button(this,"1 · Autoriser l’affichage flottant") {
@@ -53,7 +53,6 @@ class MainActivity : Activity() {
             else startActivity(Intent(Intent.ACTION_VIEW,Uri.parse("https://shizuku.rikka.app/guide/setup/")))
         })
         page.addView(Ui.button(this,"3 · Ouvrir une appli dans le cadre FloatX") { requestRounded() })
-        page.addView(Ui.text(this,"Connexion directe : le démarrage du moteur qui bloquait auparavant n’est plus utilisé. La compatibilité réelle reste à tester sur ton téléphone.",13f,Ui.MUTED).apply { setPadding(0,d(10),0,d(20)) })
         page.addView(Ui.text(this,"Mode fenêtres système — secours",21f,bold=true))
         page.addView(Ui.button(this,"Ouvrir les options développeur") {
             try { startActivity(Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)) }
@@ -85,7 +84,7 @@ class MainActivity : Activity() {
             stopService(Intent(this,FloatingService::class.java));NativeFreeformLauncher.stopWorkspace(this)
             message("Démo et espace de compatibilité arrêtés. Ferme les vraies applis avec leurs commandes Android.")
         })
-        page.addView(Ui.text(this,"Le cadre arrondi nécessite Shizuku autorisé. Une seule fenêtre FloatX à la fois. Le bouton clavier propose encore une saisie de test.",12f,Ui.MUTED).apply { setPadding(0,d(22),0,0) })
+        page.addView(Ui.text(this,"Shizuku doit rester actif et autorisé. Une fenêtre FloatX à la fois.",12f,Ui.MUTED).apply { setPadding(0,d(22),0,0) })
         page.setOnApplyWindowInsetsListener { v,insets ->
             val bars=insets.getInsets(android.view.WindowInsets.Type.systemBars())
             v.setPadding(d(24),d(24)+bars.top,d(24),d(36)+bars.bottom);insets
