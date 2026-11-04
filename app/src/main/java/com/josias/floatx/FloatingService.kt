@@ -21,26 +21,11 @@ class FloatingService : Service() {
     private lateinit var wm: WindowManager
     private val sessions=linkedMapOf<String,WindowSession>()
     private var frontKey:String?=null
-    private var backKey:String?=null
-    private var backRouter:BackRouter?=null
     private val binderDead=rikka.shizuku.Shizuku.OnBinderDeadListener {
         main.post {
-            releaseBackFocus()
             sessions.values.forEach { it.connectionLost() }
             toast("Shizuku s’est arrêté. Relance-le, puis rouvre l’appli depuis la barre FloatX. Le rendu est local.")
         }
-    }
-    private fun activateBack(key:String) {
-        if(Build.VERSION.SDK_INT<33) return
-        backKey=key
-        if(backRouter==null) backRouter=BackRouter(this,wm) {
-            sessions[backKey]?.navigateBack()
-        }
-        try { backRouter?.activate() } catch(e:RuntimeException) { toast("Retour système indisponible : utilise Retour dans ⋯.") }
-    }
-    private fun releaseBackFocus() {
-        if(Build.VERSION.SDK_INT>=33) backRouter?.hide()
-        backKey=null
     }
     private var dock:View?=null
     private var dockParams=WindowManager.LayoutParams()
@@ -84,7 +69,6 @@ class FloatingService : Service() {
         session.start()
     }
     private fun closeSession(key:String,keepService:Boolean=false) {
-        if(backKey==key) releaseBackFocus()
         sessions.remove(key)?.dispose()
         if(frontKey==key) frontKey=null
         if(!keepService && sessions.isEmpty() && dock==null) stopSelf()
@@ -135,7 +119,7 @@ class FloatingService : Service() {
         if(dock!=null) showDock()
     }
     override fun onDestroy() {
-        rikka.shizuku.Shizuku.removeBinderDeadListener(binderDead);releaseBackFocus()
+        rikka.shizuku.Shizuku.removeBinderDeadListener(binderDead)
         sessions.values.toList().forEach { it.dispose() };sessions.clear()
         dock?.let { wm.removeView(it) };dock=null
         io.shutdown();stopForeground(STOP_FOREGROUND_REMOVE);super.onDestroy()
@@ -176,6 +160,20 @@ class FloatingService : Service() {
     }
 
     private val resizeUpdate=Runnable { resizeDisplay() }
+    private val rootCheck=object:Runnable {
+        override fun run() {
+            if(!ready || failed || minimized || root==null) return
+            val target=host ?: return
+            val token=generation
+            io.execute {
+                try { target.restoreRootIfEmpty() }
+                catch(e:Exception) {
+                    NativeFreeformLauncher.record(this@FloatingService,"Vérification de l’accueil : ${e.message}")
+                }
+                main.post { if(token==generation && ready && !failed && !minimized) main.postDelayed(this,900) }
+            }
+        }
+    }
     fun start() {
         if(component!=null) host=DirectWindowBridge(this@FloatingService)
         createWindow()
@@ -205,7 +203,6 @@ class FloatingService : Service() {
         val panel=object:FrameLayout(this@FloatingService) {
             override fun dispatchTouchEvent(event:MotionEvent):Boolean {
                 if(event.actionMasked==MotionEvent.ACTION_DOWN) {
-                    if(component!=null && !isConnectionLost) activateBack(key)
                     sessions.values.forEach { it.dismissMenu() }
                 }
                 val handled=super.dispatchTouchEvent(event)
@@ -257,7 +254,6 @@ class FloatingService : Service() {
         }
         wm.addView(panel,params)
         frontKey=key
-        if(component!=null) activateBack(key)
         updateWindow()
     }
 
@@ -266,10 +262,6 @@ class FloatingService : Service() {
         isConnectionLost=true;generation++;failed=true;ready=false
         main.removeCallbacks(startupTimeout)
         status?.apply { text="Shizuku arrêté\nRelance Shizuku, puis touche l’icône de cette appli dans la barre FloatX pour la rouvrir.";visibility=View.VISIBLE }
-    }
-    fun navigateBack() {
-        if(menu!=null) { dismissMenu();return }
-        if(!isConnectionLost && ready && !minimized) remote { back() }
     }
     fun dismissMenu() {
         menu?.let { if(it.isAttachedToWindow) wm.removeView(it) };menu=null
@@ -406,6 +398,7 @@ class FloatingService : Service() {
                 main.post { if(token==generation && !failed) {
                     main.removeCallbacks(startupTimeout)
                     ready=true;status?.visibility=View.GONE
+                    main.removeCallbacks(rootCheck);main.postDelayed(rootCheck,900)
                     if(!target.trustedDisplay) toast("XOS a refusé l’écran TRUSTED. Mode standard conservé ; détails dans FloatX.")
                 } }
             } catch(e:Exception) { main.post { if(token==generation) fail("Ouverture refusée : ${e.message}") } }
@@ -448,7 +441,7 @@ class FloatingService : Service() {
     @SuppressLint("ClickableViewAccessibility")
     private fun minimize() {
         if(minimized) return
-        if(backKey==key) releaseBackFocus()
+        main.removeCallbacks(rootCheck)
         dismissMenu();minimized=true
         if(frontKey==key) frontKey=null
         getSystemService(InputMethodManager::class.java).hideSoftInputFromWindow(root?.windowToken,0)
@@ -484,7 +477,7 @@ class FloatingService : Service() {
         params.alpha=1f;params.flags=params.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
         root?.let { wm.updateViewLayout(it,params) }
         raise()
-        if(component!=null && !isConnectionLost) activateBack(key)
+        main.removeCallbacks(rootCheck);if(ready) main.postDelayed(rootCheck,900)
     }
     @SuppressLint("ClickableViewAccessibility")
     private fun gesture(onEnd:()->Unit={},onClick:()->Unit={},move:(Int,Int)->Unit):View.OnTouchListener {
@@ -515,6 +508,7 @@ class FloatingService : Service() {
         bubble?.let { bubbleParams.x=(screenW-d(60)).coerceAtLeast(0);bubbleParams.y=bubbleParams.y.coerceIn(0,(screenH-d(56)).coerceAtLeast(0));wm.updateViewLayout(it,bubbleParams) }
     }
     fun dispose() {
+        main.removeCallbacks(rootCheck)
         main.removeCallbacks(raiseRequest);dismissMenu()
         main.removeCallbacks(resizeUpdate)
         main.removeCallbacks(startupTimeout)

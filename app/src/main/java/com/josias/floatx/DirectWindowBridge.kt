@@ -27,6 +27,8 @@ class DirectWindowBridge(private val context: Context) {
     private var display: VirtualDisplay? = null
     private var displayId = -1
     private var input: Any? = null
+    private var launcher:ComponentName?=null
+    private val recovery=RootRecovery()
     var trustedDisplay = false
         private set
     var imeExternalRequested = false
@@ -120,19 +122,8 @@ class DirectWindowBridge(private val context: Context) {
                 imeNote+(if(configurationNotes.isNotEmpty()) "\nConfiguration : ${configurationNotes.joinToString(" ; ")}" else "")+(if(refusals.isNotEmpty()) "\nReplis : ${refusals.joinToString(" ; ")}" else "")
             NativeFreeformLauncher.record(context,diagnostic)
             step("S03 · ouverture de l’application…")
-            val task=service("activity_task","android.app.IActivityTaskManager\$Stub")
-            val taskClass=Class.forName("android.app.IActivityTaskManager")
-            val start=methods(taskClass).firstOrNull { it.name=="startActivity" && it.parameterTypes.contains(Intent::class.java) }
-                ?: error("Interface de lancement non prise en charge")
-            val intent=Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER).setComponent(target)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
-            val activityOptions=ActivityOptions.makeBasic().setLaunchDisplayId(displayId)
-            call(ActivityOptions::class.java,activityOptions,"setLaunchWindowingMode",1)
-            val options=activityOptions.toBundle()
-            val launchArgs=ActivityStartCall.arguments(start.parameterTypes.map { it.name },intent,options)
-            start.isAccessible=true
-            val result=start.invoke(task,*launchArgs) as Int
-            check(result>=0) { "Android a refusé le lancement (code $result)" }
+            launch(target,initial=true)
+            launcher=target
             step("S04 · connexion du tactile…")
             input=service("input","android.hardware.input.IInputManager\$Stub")
             step("S05 · fenêtre prête (${if(trustedDisplay) "TRUSTED" else "standard"})")
@@ -144,6 +135,51 @@ class DirectWindowBridge(private val context: Context) {
             if(cause is VirtualMachineError || cause is ThreadDeath) throw cause
             throw IllegalStateException("$code · ${cause.message ?: cause.javaClass.simpleName}",cause)
         }
+    }
+    private fun launch(target:ComponentName,initial:Boolean) {
+        val task=service("activity_task","android.app.IActivityTaskManager\$Stub")
+        val taskClass=Class.forName("android.app.IActivityTaskManager")
+        val start=methods(taskClass).firstOrNull { it.name=="startActivity" && it.parameterTypes.contains(Intent::class.java) }
+            ?: error("Interface de lancement non prise en charge")
+        val intent=Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER).setComponent(target)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or (if(initial) Intent.FLAG_ACTIVITY_MULTIPLE_TASK else 0))
+        val activityOptions=ActivityOptions.makeBasic().setLaunchDisplayId(displayId)
+        call(ActivityOptions::class.java,activityOptions,"setLaunchWindowingMode",1)
+        val options=activityOptions.toBundle()
+        val launchArgs=ActivityStartCall.arguments(start.parameterTypes.map { it.name },intent,options)
+        start.isAccessible=true
+        val result=start.invoke(task,*launchArgs) as Int
+        check(result>=0) { "Android a refusé le lancement (code $result)" }
+    }
+    @Synchronized fun restoreRootIfEmpty() {
+        val target=launcher ?: return
+        if(displayId<0) return
+        try {
+        val task=service("activity_task","android.app.IActivityTaskManager\$Stub")
+        val type=Class.forName("android.app.IActivityTaskManager")
+        val signature=listOf("int","boolean","boolean","int")
+        val method=methods(type).firstOrNull { it.name=="getTasks" && it.parameterTypes.map { p -> p.name }==signature }
+            ?: run { recovery.observe(AppPresence.UNKNOWN);return } // Never infer emptiness from missing APIs.
+        method.isAccessible=true
+        val tasks=method.invoke(task,100,false,false,displayId) as? List<*> ?: run { recovery.observe(AppPresence.UNKNOWN);return }
+        val taskInfo=Class.forName("android.app.TaskInfo")
+        val fields=HiddenApiBypass.getInstanceFields(taskInfo)
+        val displayField=fields.firstOrNull { it.name=="displayId" } ?: run { recovery.observe(AppPresence.UNKNOWN);return }
+        val topField=fields.firstOrNull { it.name=="topActivity" } ?: run { recovery.observe(AppPresence.UNKNOWN);return }
+        val visibleField=fields.firstOrNull { it.name=="isVisible" }
+        var unknown=false
+        var visible=false
+        for(info in tasks.filterNotNull()) {
+            if(displayField.getInt(info)!=displayId || topField.get(info)==null) continue
+            if(visibleField==null) unknown=true
+            else if(visibleField.getBoolean(info)) visible=true
+        }
+        val state=when { visible -> AppPresence.VISIBLE;unknown -> AppPresence.UNKNOWN;else -> AppPresence.EMPTY }
+        if(recovery.observe(state)) {
+            // Bring the launcher task back on the SAME display; preserve live app navigation.
+            launch(target,initial=false)
+        }
+        } catch(e:Exception) { recovery.observe(AppPresence.UNKNOWN);throw e }
     }
     private fun inject(event:InputEvent) {
         check(displayId>=0) { "Aucune fenêtre active" }
@@ -163,7 +199,7 @@ class DirectWindowBridge(private val context: Context) {
     }
     @Synchronized fun close() {
         val previous=display
-        display=null;displayId=-1;input=null;trustedDisplay=false;imeExternalRequested=false
+        display=null;displayId=-1;input=null;launcher=null;recovery.reset();trustedDisplay=false;imeExternalRequested=false
         try { previous?.release() } catch(_:Exception) { }
     }
 }

@@ -32,7 +32,7 @@ class MainActivity : Activity() {
         val scroll=ScrollView(this).apply { setBackgroundColor(0xFFF8F7F2.toInt());isFillViewport=true }
         val page=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL;setPadding(d(24),d(24),d(24),d(36)) }
         scroll.addView(page)
-        page.addView(Ui.text(this,"FLOATX  /  0.4.4 · MULTIFENÊTRES",12f,Ui.GREEN,true))
+        page.addView(Ui.text(this,"FLOATX  /  0.4.5 · MULTIFENÊTRES",12f,Ui.GREEN,true))
         page.addView(Ui.text(this,"Tes applis,\nen flottant.",38f,bold=true).apply { setPadding(0,d(16),0,d(12)) })
         page.addView(Ui.text(this,"Tes applis dans des fenêtres flottantes.",17f,Ui.MUTED))
         val card=LinearLayout(this).apply {
@@ -57,7 +57,7 @@ class MainActivity : Activity() {
         page.addView(Ui.button(this,"Choisir les icônes de ma barre") { choosePins() })
         page.addView(Ui.button(this,"Afficher ma barre de raccourcis") {
             if(!Settings.canDrawOverlays(this)) message("Autorise d’abord l’affichage flottant.")
-            else { startForegroundService(Intent(this,FloatingService::class.java).setAction("DOCK"));finishAndRemoveTask() }
+            else { startForegroundService(Intent(this,FloatingService::class.java).setAction("DOCK"));moveTaskToBack(true) }
         })
         page.addView(Ui.text(this,"Mode fenêtres système — secours",21f,bold=true))
         page.addView(Ui.button(this,"Ouvrir les options développeur") {
@@ -144,7 +144,7 @@ class MainActivity : Activity() {
                 storage.edit().putStringSet("apps",selected).apply()
                 if(Settings.canDrawOverlays(this)) {
                     startForegroundService(Intent(this,FloatingService::class.java).setAction("DOCK"))
-                    finishAndRemoveTask()
+                    moveTaskToBack(true)
                 }
             }.setNegativeButton("Annuler",null).show()
     }
@@ -155,7 +155,7 @@ class MainActivity : Activity() {
         if(Build.VERSION.SDK_INT>=33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS),101)
         startForegroundService(Intent(this,FloatingService::class.java).putExtra("component",target.flattenToString()).putExtra("label",label))
-        finishAndRemoveTask()
+        moveTaskToBack(true)
     }
     private fun launchNative(target: ComponentName,label: String) {
         // A leftover demo overlay should never obscure the native launch test.
@@ -171,7 +171,7 @@ class MainActivity : Activity() {
         if(!Settings.canDrawOverlays(this)) { message("Autorise d’abord l’affichage flottant de la démo.");return }
         if(Build.VERSION.SDK_INT>=33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS),101)
-        startForegroundService(Intent(this,FloatingService::class.java));finishAndRemoveTask()
+        startForegroundService(Intent(this,FloatingService::class.java));moveTaskToBack(true)
     }
     private fun message(value:String) { AlertDialog.Builder(this).setMessage(value).setPositiveButton("Compris",null).show() }
     private fun d(value:Int)=Ui.dp(this,value)

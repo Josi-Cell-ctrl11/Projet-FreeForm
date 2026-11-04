@@ -1,3 +1,11 @@
+# FloatX 0.4.5 — Retour du menu et accueil de l’appli
+
+La capture globale de Retour introduite en 0.4.4 est retirée (BackRouter et sa fenêtre auxiliaire supprimés). Le panneau principal reprend le comportement de 0.4.3. Les diagnostics de perte de Shizuku restent disponibles.
+
+Le menu ⋯ transmet toujours Retour à l’application flottante. Si Android laisse ensuite l’écran virtuel sans tâche visible, deux observations successives (espacées de 900 ms) réaffichent l’activité de lancement de l’appli sur le même écran. Les tâches actives ne sont pas réinitialisées ; une lecture inconnue de la visibilité empêche toute relance. Le contrôle est suspendu lorsque la fenêtre est minimisée et retiré à sa fermeture.
+
+À vérifier sur XOS : revenir d’une conversation à la liste, puis faire Retour à la racine et vérifier que l’accueil revient au lieu de laisser un cadre transparent. Le Retour du téléphone conserve son fonctionnement antérieur.
+
 # FloatX 0.4.4 — Retour et perte de Shizuku
 
 Le panneau de réglages est retiré de l’historique après ouverture d’une fenêtre ou de la barre. Une fenêtre auxiliaire transparente de 1 pixel capte Retour sur l’écran principal lorsque l’utilisateur sélectionne une application flottante ; la commande est injectée dans son écran virtuel. Cette fenêtre n’est pas un éditeur et ne recouvre pas le clavier. La capture est retirée quand la fenêtre sélectionnée est réduite, fermée, ou quand Shizuku s’arrête. Le menu ⋯ conserve sa commande Retour.
