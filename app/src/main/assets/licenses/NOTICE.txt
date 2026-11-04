@@ -4,3 +4,7 @@ License: Apache-2.0 (Apache-2.0.txt)
 https://github.com/LSPosed/AndroidHiddenApiBypass
 
 FloatX uses the existing Android freeform launch mechanism, inspired by farmerbb/Taskbar (Braden Farmer, Apache-2.0). No Taskbar source files are bundled.
+
+Shizuku API and Provider 13.1.5
+RikkaApps, MIT license (Shizuku-MIT.txt).
+https://github.com/RikkaApps/Shizuku-API

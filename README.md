@@ -1,71 +1,64 @@
-# FloatX 0.2 — fenêtres Android sans Shizuku
+# FloatX 0.3.1 — cadre arrondi avec Shizuku direct
 
-Prototype Kotlin de lancement d’applications dans les **fenêtres libres natives d’Android**, sur le principe de Taskbar. Cette version remplace le moteur d’écran virtuel de la série 0.1 : **aucun Shizuku, root, ADB ou processus shell n’est utilisé**.
+Cette version remet les vraies applications dans le cadre FloatX : coins arrondis, poignée de déplacement, coin de redimensionnement, agrandissement et réduction en bulle. Le moteur 0.1 qui attendait un `UserService` Shizuku est remplacé par des **appels Binder directs** via `ShizukuBinderWrapper`.
 
-Le lanceur XOS reste en place. Les options développeur de fenêtres libres déjà utilisées avec Taskbar doivent rester activées ; FloatX ne les modifie pas.
+## Installer et essayer
 
-## Installer et tester
+1. Télécharger **FloatX-APK** dans le dernier lancement réussi de **Actions → APK Android**.
+2. Décompresser, désinstaller l’ancien FloatX et installer `FloatX-0.3.1-debug.apk` (les APK debug n’ont pas encore de signature stable).
+3. Dans FloatX, autoriser l’affichage flottant, démarrer Shizuku et autoriser FloatX.
+4. Utiliser **Ouvrir une appli dans le cadre FloatX**, puis choisir **Calculatrice**.
+5. Vérifier que le contenu s’affiche dans le cadre arrondi, que les touches répondent, puis essayer déplacement, redimensionnement et réduction/restauration en bulle.
 
-1. Dans **Actions → APK Android**, ouvrir le dernier lancement réussi.
-2. Télécharger l’artefact **FloatX-APK**, décompresser et installer `FloatX-0.2.0-native-debug.apk`.
-3. Si Android refuse la mise à jour, désinstaller l’ancien FloatX puis installer ce nouvel APK : les compilations debug n’ont pas encore de clé stable.
-4. Arrêter Shizuku pour vérifier que FloatX fonctionne indépendamment de lui. Aucun accès Shizuku n’est à accorder.
-5. Ouvrir FloatX, garder **Compatibilité de lancement type Taskbar** activée, puis **Choisir une vraie application → Calculatrice**.
-6. Vérifier visuellement si Calculatrice s’ouvre dans une fenêtre, et si les touches répondent.
-7. Si elle s’ouvre en plein écran, revenir dans FloatX, désactiver la compatibilité et réessayer. Le bouton **Tester une fenêtre FloatX** lance aussi une activité interne capable de signaler son propre état multi-fenêtre.
+**Calculatrice et le clavier ont été validés par l’utilisateur sur son téléphone.** La compatibilité des autres applis et du nouveau profil TRUSTED reste à confirmer sur son firmware XOS. En cas de blocage, le code S01–S04 situe l’étape concernée ; envoyer une capture de ce message. L’attente est limitée à 25 secondes côté interface.
 
-Le test décisif reste à réaliser sur le téléphone : compilation et tests unitaires ne garantissent pas que XOS acceptera les options de lancement.
+Le mode cadre direct nécessite Android 14 ou supérieur et une autorisation Shizuku active. Aucune modification de Shizuku, du firmware, du lanceur ou des permissions système persistantes n’est effectuée par FloatX.
 
-## Ce qui change
+## Pourquoi un autre chemin de connexion
 
-- `ActivityOptions.setLaunchBounds` demande la taille initiale.
-- `ActivityOptions.setLaunchWindowingMode(5)` est invoqué via AndroidHiddenApiBypass 6.1 pour demander le mode libre, comme le mécanisme utilisé dans Taskbar. Cette bibliothèque est embarquée ; aucune application externe n’est nécessaire.
-- Avec la compatibilité activée, une activité dédiée prépare d’abord un espace multi-fenêtre, puis lance l’activité sélectionnée après une courte transition.
-- Le mode direct n’utilise pas cette activité intermédiaire.
-- Si l’accès au sélecteur de mode est refusé, une demande de taille via l’API publique reste tentée et le diagnostic **N01** est conservé dans FloatX. Il ne constitue pas une confirmation de fenêtre libre.
-- Si le lancement est refusé, le diagnostic **N02** est affiché et conservé.
+Des utilisateurs signalent que `LoadedApk.makeApplication()` empêche le démarrage des UserServices sur certains firmwares MediaTek, y compris sous Android 16 : https://github.com/RikkaApps/Shizuku/issues/1198 . Ce problème est une cause plausible du précédent diagnostic « affichage prêt, moteur non connecté » ; il n’a pas été confirmé par les logs du téléphone de l’utilisateur.
 
-La dernière tentative est enregistrée localement, sans serveur ni télémétrie. Le test interne sait seulement détecter son **propre** état multi-fenêtre ; FloatX ne prétend pas inspecter celui des autres applis.
+Le nouveau code n’appelle ni `bindUserService`, ni `newProcess`, ni `LoadedApk.makeApplication`. Il crée des interfaces système Binder déléguées à Shizuku dans le processus FloatX :
 
-## Apparence et limites de cette étape
+- `IDisplayManager` : création d’un écran virtuel public, sans recopie de l’écran principal ni contenu sécurisé.
+- Un `DisplayManagerGlobal` séparé : le singleton Android du processus reste intact.
+- Attribution du paquet `com.android.shell`, correspondant à l’identité déléguée lorsque Shizuku est démarré en ADB.
+- `IActivityTaskManager` : lancement de l’activité sélectionnée sur cet écran, en plein écran à l’intérieur de notre cadre. La disposition des arguments est contrôlée avant l’appel.
+- `IInputManager` : interaction tactile dans l’écran virtuel de cette session.
 
-Les **vraies applications utilisent les barres et commandes du système Android/XOS**, y compris la barre grise éventuelle. Leur clavier et leurs interactions sont gérés directement par Android : plus de transfert d’image ou de tactile dans un écran virtuel.
+Le composant à lancer provient du choix explicite de l’utilisateur ; aucune commande shell libre n’est exécutée. Les écrans créés sont libérés à la fermeture, avec suppression de leur contenu. Une seule fenêtre FloatX est gérée à la fois. Le mode Shizuku ADB (UID shell) est celui visé ; le mode root n’est pas nécessaire ni validé.
 
-L’objectif de cette version est de valider l’ouverture réelle sans moteur externe. La poignée et la bulle personnalisées de la maquette sont toujours testables dans **Essayer les gestes — démo**, mais ne contrôlent pas encore les vraies fenêtres. L’intégration du style de la maquette constitue une étape distincte dont la faisabilité reste à vérifier.
+## Apparence, bulles et limites
 
-La compatibilité peut varier selon le firmware et l’application. Une activité déjà ouverte peut reprendre sa tâche existante, et Android peut ignorer les limites demandées. Certaines activités ne sont pas redimensionnables. Une petite fenêtre de préparation peut apparaître brièvement selon le comportement de XOS.
+Le cadre est dessiné par FloatX. Son contenu est une TextureView avec accélération graphique explicite. Réduire en bulle masque la fenêtre sans détacher sa surface ; restaurer la bulle réaffiche la même session, sans relancer l’application. XOS peut néanmoins interrompre des processus en arrière-plan.
 
-Le bouton **Arrêter la démo et l’espace de compatibilité** ferme seulement les tâches appartenant à FloatX. Fermer les autres applis avec leurs commandes système. FloatX ne remplace ni l’accueil XOS ni le gestionnaire système de fenêtres.
+Le clavier Android est utilisé directement. À la demande de l’utilisateur, le bouton et le champ de saisie de secours ainsi que l’injection de texte correspondante ont été supprimés. Le bouton **‹** envoie Retour.
 
-## Démo validée
+### Profils d’affichage et permissions
 
-Conversation fictive locale avec Alex : déplacement, redimensionnement, agrandissement, réduction et déplacement de bulle. L’autorisation **Afficher par-dessus les autres applications** et le service de notification concernent cette démo ; aucun message n’est envoyé.
+La création essaie dans cet ordre : **1803** (PUBLIC, PRESENTATION, OWN_CONTENT_ONLY, DESTROY_CONTENT_ON_REMOVAL, SHOULD_SHOW_SYSTEM_DECORATIONS, TRUSTED), puis **1291** (TRUSTED sans décorations) si Android refuse la première création, puis **267**, le profil standard qui fonctionnait pour Calculatrice. Seul un refus de sécurité lors de la création déclenche ces replis.
 
-## Compilation et vérifications
+La permission `ADD_TRUSTED_DISPLAY` de l’identité Shizuku est contrôlée à titre de diagnostic ; elle n’est ni accordée ni modifiée par FloatX. Une tentative effective confirme le profil accepté. Le résultat et les refus sont enregistrés localement et affichés à la réouverture de FloatX. En repli standard, un message l’indique explicitement.
 
-JDK 17, Gradle 8.9, Android SDK 35, Android Gradle Plugin 8.7.3 et Kotlin 2.0.21. Android 11 minimum.
+Si l’écran est TRUSTED, FloatX demande `IWindowManager.setDisplayImePolicy(displayId, LOCAL)` pour cette session. L’acceptation de cette demande ne garantit pas à elle seule que chaque clavier/fenêtre secondaire affichera son interface de la même manière sur tous les firmwares. Les décorations système ne remplacent pas cette politique IME. Les restrictions de taille et d’orientation sont ignorées sur les écrans TRUSTED quand l’API Android correspondante est disponible.
 
-```
-gradle --no-daemon testDebugUnitTest lintDebug assembleDebug
-```
+Les APIs d’entrée `injectInputEventToTarget` et `injectInputEvent` restent prises en charge dans cet ordre. Les sources AOSP consultées contiennent encore les deux ; leur disponibilité n’est pas déduite uniquement du numéro de version Android.
 
-GitHub Actions installe ces outils, exécute les tests, l’analyse Android et produit l’APK. Les tests vérifient les limites de la démo et les tailles natives demandées avec les barres système, les découpes, les petits écrans et les changements d’orientation.
+Les contenus protégés peuvent rester noirs. Certaines applis refusent les écrans secondaires. Le bouton d’agrandissement remplit l’espace disponible avec le cadre FloatX ; il ne transfère pas l’activité vers l’écran principal. Le panneau latéral et les badges de notification de la maquette ne sont pas implémentés.
 
-## Architecture
+## Modes conservés
 
-- `MainActivity` : choix de l’application, modes direct/compatibilité, diagnostic local, accès à la démo.
-- `NativeFreeformLauncher` : demande de lancement en mode libre et taille initiale ; aucun accès aux données privées des autres applis.
-- `FreeformWorkspaceActivity` : tâche auxiliaire redimensionnable, distincte du lanceur et exclue des applications récentes.
-- `FreeformProbeActivity` : test interne de l’état multi-fenêtre.
-- `NativeWindowBounds` : calcul des limites demandées en coordonnées écran.
-- `FloatingService` / `WindowGeometry` : démo locale et ses gestes.
+- **Mode fenêtres système — secours** : lancement natif de la série 0.2, sans Shizuku, avec les décorations système. L’ouverture de Calculatrice a été confirmée sur le téléphone de l’utilisateur ; la conservation de son calcul après réduction/réouverture n’a pas été validée.
+- **Essayer les gestes — démo** : conversation fictive locale, indépendante de Shizuku, dont les gestes ont été validés par l’utilisateur.
 
-L’ancien `WindowHost`, son interface AIDL et la dépendance Shizuku sont supprimés de l’APK. Leur code reste dans l’historique Git des versions 0.1.
+## Compilation et validation
+
+JDK 17, Gradle 8.9, Android SDK 35, AGP 8.7.3 et Kotlin 2.0.21. `gradle --no-daemon testDebugUnitTest lintDebug assembleDebug`.
+
+Les tests couvrent les limites de fenêtre, les barres/découpes, la disposition des arguments de lancement Binder et les profils de repli (sans décorations sur un écran non trusted). Les signatures inconnues sont rejetées plutôt que devinées. La CI ne remplace pas les essais de rendu, tactile, clavier et maintien en arrière-plan sur XOS.
 
 ## Sources et licences
 
-Code original FloatX : MIT (`LICENSE`). Principe de lancement étudié dans [Taskbar](https://github.com/farmerbb/Taskbar), Braden Farmer, Apache-2.0 ; aucun fichier source de Taskbar n’est copié.
+Code original FloatX : MIT (`LICENSE`). Dépendances : AndroidHiddenApiBypass 6.1 (LSPosed, Apache-2.0), Shizuku API/Provider 13.1.5 (RikkaApps, MIT). Copies des licences et notices dans `app/src/main/assets/licenses/`.
 
-Dépendance embarquée : [Android Hidden API Bypass 6.1](https://github.com/LSPosed/AndroidHiddenApiBypass), Copyright 2021-2025 LSPosed, Apache-2.0. Copie de la licence et notice dans `app/src/main/assets/licenses/`.
-
-Aucun composant ni ressource propriétaire XOS n’est intégré. Projet indépendant, non affilié à Infinix. L’appel à une API non publique sert ici à la compatibilité de lancement Android et ne donne pas de permissions système supplémentaires.
+Le lancement natif de secours s’inspire du mécanisme de Taskbar (Braden Farmer, Apache-2.0). Aucun fichier source Taskbar ou composant propriétaire XOS n’est intégré. Projet non affilié à Infinix.

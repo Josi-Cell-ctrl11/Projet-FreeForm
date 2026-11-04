@@ -3,7 +3,10 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="moe.shizuku.manager.permission.API_V23" />
     <queries>
+        <package android:name="moe.shizuku.privileged.api" />
+        <package android:name="com.android.shell" />
         <intent><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent>
     </queries>
     <application android:label="FloatX" android:icon="@drawable/ic_floatx"
@@ -23,5 +26,10 @@
         <service android:name=".FloatingService" android:exported="false" android:foregroundServiceType="specialUse">
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="User-controlled floating app window and minimized bubble" />
         </service>
+        <provider android:name="rikka.shizuku.ShizukuProvider"
+            android:authorities="${applicationId}.shizuku" android:multiprocess="false"
+            android:enabled="true" android:exported="true"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
+        <meta-data android:name="moe.shizuku.client.V3_SUPPORT" android:value="true" />
     </application>
 </manifest>
