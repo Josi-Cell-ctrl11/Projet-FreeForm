@@ -1,3 +1,21 @@
+# FloatX 0.4.0
+
+Cette version ajoute plusieurs fenêtres indépendantes et une barre flottante de raccourcis.
+
+- Utiliser « Choisir les icônes de ma barre » pour épingler les applis ; cocher puis enregistrer.
+- Une pression sur une icône ouvre l’appli dans FloatX ou restaure sa fenêtre existante.
+- Appui long sur une icône : retirer le raccourci. Le bouton + ouvre la sélection.
+- Chaque fenêtre dispose de sa fermeture, de son redimensionnement et de sa bulle.
+- La densité du contenu est adaptée aux petites dimensions pour conserver tout le contenu dans la surface. Le cadre garde un minimum de 180 × 200 dp pour ses commandes.
+- L’écran virtuel demande le mode plein écran interne, sans décorations système, afin d’enlever la seconde barre de titre et la barre de navigation internes.
+- Le clavier Android est demandé sur l’écran principal via IME_POLICY_FALLBACK_DISPLAY, au lieu d’être contenu dans la fenêtre. Aucun champ de saisie de test n’est ajouté.
+
+Les réglages concernent les écrans virtuels de FloatX, sans changement global de XOS. Chaque refus système apparaît dans le diagnostic. Les profils utilisés sont 1290 (privé, TRUSTED sans décorations), puis 266 si la permission est refusée. L’effet des commandes de fenêtre et du clavier dépend du système XOS et doit être vérifié sur le téléphone. La compatibilité universelle n’est pas garantie.
+
+Les tests de géométrie, de densité et de signature Binder, lint et la compilation APK sont exécutés par GitHub Actions. Le mode système de secours et la démo restent disponibles.
+
+## Historique technique 0.3.1
+
 # FloatX 0.3.1 — cadre arrondi avec Shizuku direct
 
 Cette version remet les vraies applications dans le cadre FloatX : coins arrondis, poignée de déplacement, coin de redimensionnement, agrandissement et réduction en bulle. Le moteur 0.1 qui attendait un `UserService` Shizuku est remplacé par des **appels Binder directs** via `ShizukuBinderWrapper`.

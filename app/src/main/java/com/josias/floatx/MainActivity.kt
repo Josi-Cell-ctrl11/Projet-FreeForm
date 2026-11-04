@@ -32,7 +32,7 @@ class MainActivity : Activity() {
         val scroll=ScrollView(this).apply { setBackgroundColor(0xFFF8F7F2.toInt());isFillViewport=true }
         val page=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL;setPadding(d(24),d(24),d(24),d(36)) }
         scroll.addView(page)
-        page.addView(Ui.text(this,"FLOATX  /  0.3.1 · CADRE ARRONDI",12f,Ui.GREEN,true))
+        page.addView(Ui.text(this,"FLOATX  /  0.4.0 · MULTIFENÊTRES",12f,Ui.GREEN,true))
         page.addView(Ui.text(this,"Tes applis,\nen flottant.",38f,bold=true).apply { setPadding(0,d(16),0,d(12)) })
         page.addView(Ui.text(this,"Tes applis dans des fenêtres flottantes.",17f,Ui.MUTED))
         val card=LinearLayout(this).apply {
@@ -53,6 +53,11 @@ class MainActivity : Activity() {
             else startActivity(Intent(Intent.ACTION_VIEW,Uri.parse("https://shizuku.rikka.app/guide/setup/")))
         })
         page.addView(Ui.button(this,"3 · Ouvrir une appli dans le cadre FloatX") { requestRounded() })
+        page.addView(Ui.button(this,"Choisir les icônes de ma barre") { choosePins() })
+        page.addView(Ui.button(this,"Afficher ma barre de raccourcis") {
+            if(!Settings.canDrawOverlays(this)) message("Autorise d’abord l’affichage flottant.")
+            else { startForegroundService(Intent(this,FloatingService::class.java).setAction("DOCK"));moveTaskToBack(true) }
+        })
         page.addView(Ui.text(this,"Mode fenêtres système — secours",21f,bold=true))
         page.addView(Ui.button(this,"Ouvrir les options développeur") {
             try { startActivity(Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)) }
@@ -84,12 +89,13 @@ class MainActivity : Activity() {
             stopService(Intent(this,FloatingService::class.java));NativeFreeformLauncher.stopWorkspace(this)
             message("Démo et espace de compatibilité arrêtés. Ferme les vraies applis avec leurs commandes Android.")
         })
-        page.addView(Ui.text(this,"Shizuku doit rester actif et autorisé. Une fenêtre FloatX à la fois.",12f,Ui.MUTED).apply { setPadding(0,d(22),0,0) })
+        page.addView(Ui.text(this,"Shizuku doit rester actif et autorisé. Plusieurs fenêtres et bulles peuvent rester ouvertes.",12f,Ui.MUTED).apply { setPadding(0,d(22),0,0) })
         page.setOnApplyWindowInsetsListener { v,insets ->
             val bars=insets.getInsets(android.view.WindowInsets.Type.systemBars())
             v.setPadding(d(24),d(24)+bars.top,d(24),d(36)+bars.bottom);insets
         }
         setContentView(scroll)
+        if(intent.getBooleanExtra("pick_pin",false)) scroll.post { choosePins() }
     }
     override fun onResume() {
         super.onResume()
@@ -120,6 +126,26 @@ class MainActivity : Activity() {
             val label=app.loadLabel(packageManager).toString()
             if(rounded) launchRounded(component,label) else launchNative(component,label)
         }.setNegativeButton("Annuler",null).show()
+    }
+    private fun choosePins() {
+        val query=Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+        val apps=packageManager.queryIntentActivities(query,0).filter { it.activityInfo.packageName!=packageName }
+            .distinctBy { ComponentName(it.activityInfo.packageName,it.activityInfo.name).flattenToString() }
+            .sortedBy { it.loadLabel(packageManager).toString().lowercase() }
+        val storage=getSharedPreferences("dock",MODE_PRIVATE)
+        val selected=storage.getStringSet("apps",emptySet()).orEmpty().toMutableSet()
+        val keys=apps.map { ComponentName(it.activityInfo.packageName,it.activityInfo.name).flattenToString() }
+        AlertDialog.Builder(this).setTitle("Applications dans ma barre")
+            .setMultiChoiceItems(apps.map { it.loadLabel(packageManager).toString() }.toTypedArray(),
+                keys.map { it in selected }.toBooleanArray()) { _,index,checked ->
+                if(checked) selected.add(keys[index]) else selected.remove(keys[index])
+            }.setPositiveButton("Enregistrer") { _,_ ->
+                storage.edit().putStringSet("apps",selected).apply()
+                if(Settings.canDrawOverlays(this)) {
+                    startForegroundService(Intent(this,FloatingService::class.java).setAction("DOCK"))
+                    moveTaskToBack(true)
+                }
+            }.setNegativeButton("Annuler",null).show()
     }
     private fun launchRounded(target:ComponentName,label:String) {
         if(!Settings.canDrawOverlays(this)||!Shizuku.pingBinder()||Shizuku.checkSelfPermission()!=PackageManager.PERMISSION_GRANTED) {

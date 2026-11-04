@@ -29,7 +29,7 @@ class DirectWindowBridge(private val context: Context) {
     private var input: Any? = null
     var trustedDisplay = false
         private set
-    var imeLocalRequested = false
+    var imeExternalRequested = false
         private set
     var diagnostic = ""
         private set
@@ -99,18 +99,25 @@ class DirectWindowBridge(private val context: Context) {
             }
             displayId=display!!.display.displayId
             trustedDisplay=DisplayProfiles.trusted(actualFlags)
-            var imeNote="clavier local non demandé (écran standard)"
-            if(trustedDisplay) {
-                try {
-                    val window=service("window","android.view.IWindowManager\$Stub")
-                    call(Class.forName("android.view.IWindowManager"),window,"setDisplayImePolicy",displayId,0)
-                    imeLocalRequested=true
-                    imeNote="clavier local demandé ; affichage à confirmer"
-                } catch(e:Exception) { imeNote="clavier local refusé : ${e.message ?: e.javaClass.simpleName}" }
+            val window=service("window","android.view.IWindowManager\$Stub")
+            val windowClass=Class.forName("android.view.IWindowManager")
+            val configurationNotes=mutableListOf<String>()
+            fun configure(name:String,vararg args:Any?) {
+                try { call(windowClass,window,name,*args) }
+                catch(e:Exception) { configurationNotes.add("$name : ${e.message ?: e.javaClass.simpleName}") }
             }
+            // Only this owned display is changed. Never change global developer settings.
+            configure("setWindowingMode",displayId,1) // Fullscreen content inside our frame.
+            configure("setShouldShowSystemDecors",displayId,false)
+            var imeNote="clavier sur l’écran principal non confirmé"
+            try {
+                call(windowClass,window,"setDisplayImePolicy",displayId,1) // FALLBACK_DISPLAY
+                imeExternalRequested=true
+                imeNote="clavier demandé sur l’écran principal"
+            } catch(e:Exception) { configurationNotes.add("clavier externe : ${e.message ?: e.javaClass.simpleName}") }
             diagnostic="Écran : ${if(trustedDisplay) "TRUSTED" else "standard"} · flags=$actualFlags · UID=$identity\n"+
                 "ADD_TRUSTED_DISPLAY : ${if(permission==android.content.pm.PackageManager.PERMISSION_GRANTED) "accordée" else "non accordée"}\n"+
-                imeNote+(if(refusals.isNotEmpty()) "\nReplis : ${refusals.joinToString(" ; ")}" else "")
+                imeNote+(if(configurationNotes.isNotEmpty()) "\nConfiguration : ${configurationNotes.joinToString(" ; ")}" else "")+(if(refusals.isNotEmpty()) "\nReplis : ${refusals.joinToString(" ; ")}" else "")
             NativeFreeformLauncher.record(context,diagnostic)
             step("S03 · ouverture de l’application…")
             val task=service("activity_task","android.app.IActivityTaskManager\$Stub")
@@ -156,7 +163,7 @@ class DirectWindowBridge(private val context: Context) {
     }
     @Synchronized fun close() {
         val previous=display
-        display=null;displayId=-1;input=null;trustedDisplay=false;imeLocalRequested=false
+        display=null;displayId=-1;input=null;trustedDisplay=false;imeExternalRequested=false
         try { previous?.release() } catch(_:Exception) { }
     }
 }

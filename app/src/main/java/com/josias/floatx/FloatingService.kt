@@ -14,19 +14,112 @@ import android.view.inputmethod.InputMethodManager
 import android.widget.*
 import java.util.concurrent.Executors
 
-/** One floating session. Stopping the foreground service releases every owned resource. */
+/** The service owns independent display sessions and a persistent shortcut dock. */
 class FloatingService : Service() {
     private val main = Handler(Looper.getMainLooper())
     private val io = Executors.newSingleThreadExecutor()
     private lateinit var wm: WindowManager
+    private val sessions=linkedMapOf<String,WindowSession>()
+    private var dock:View?=null
+    private var dockParams=WindowManager.LayoutParams()
+    private val pins by lazy { getSharedPreferences("dock",MODE_PRIVATE) }
+
+    override fun onCreate() {
+        super.onCreate()
+        wm=getSystemService(WindowManager::class.java)
+        val channel = NotificationChannel("windows","Fenêtre flottante",NotificationManager.IMPORTANCE_LOW)
+        getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+        val open = PendingIntent.getActivity(this,0,Intent(this,MainActivity::class.java),PendingIntent.FLAG_IMMUTABLE)
+        val stop = PendingIntent.getService(this,1,Intent(this,FloatingService::class.java).setAction("STOP"),PendingIntent.FLAG_IMMUTABLE)
+        val notification = Notification.Builder(this,"windows").setSmallIcon(com.josias.floatx.R.drawable.ic_floatx)
+            .setContentTitle("FloatX · fenêtre active").setContentText("Appuie pour revenir aux commandes.")
+            .setContentIntent(open).setOngoing(true).addAction(Notification.Action.Builder(null,"Tout fermer",stop).build()).build()
+        if (Build.VERSION.SDK_INT >= 34) startForeground(1,notification,ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+        else startForeground(1,notification)
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == "STOP" || !Settings.canDrawOverlays(this)) { stopSelf(); return START_NOT_STICKY }
+        if(intent?.action=="DOCK") { showDock();return START_NOT_STICKY }
+        openSession(intent?.getStringExtra("component"),intent?.getStringExtra("label") ?: "Démo interactive")
+        showDock()
+        return START_NOT_STICKY
+    }
+
+    private fun openSession(component:String?,label:String) {
+        if(component!=null && (Build.VERSION.SDK_INT<34 || !rikka.shizuku.Shizuku.pingBinder() ||
+            rikka.shizuku.Shizuku.checkSelfPermission()!=android.content.pm.PackageManager.PERMISSION_GRANTED)) {
+            toast("Ouvre FloatX pour démarrer et autoriser Shizuku.");return
+        }
+        val key=component ?: "demo"
+        sessions[key]?.let { it.restore();return }
+        val session=WindowSession(key,component,label)
+        sessions[key]=session
+        session.start()
+    }
+    private fun closeSession(key:String) {
+        sessions.remove(key)?.dispose()
+        if(sessions.isEmpty() && dock==null) stopSelf()
+    }
+    private fun d(value:Int)=Ui.dp(this,value)
+    private fun toast(value:String) { Toast.makeText(this,value,Toast.LENGTH_LONG).show() }
+
+    private fun showDock() {
+        dock?.let { wm.removeView(it) }
+        val row=LinearLayout(this).apply {
+            gravity=Gravity.CENTER_VERTICAL;setPadding(d(6),d(4),d(6),d(4))
+            background=Ui.rounded(this@FloatingService,0xF2FFFFFF.toInt(),22);elevation=d(10).toFloat()
+        }
+        fun picker() {
+            startActivity(Intent(this,MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                .putExtra("pick_pin",true))
+        }
+        row.addView(Ui.icon(this,"+","Ajouter des applications à la barre") { picker() })
+        for(value in pins.getStringSet("apps",emptySet()).orEmpty().sorted()) {
+            val target=ComponentName.unflattenFromString(value) ?: continue
+            try {
+                val info=packageManager.getActivityInfo(target,0)
+                val label=info.loadLabel(packageManager).toString()
+                row.addView(ImageView(this).apply {
+                    setImageDrawable(info.loadIcon(packageManager));setPadding(d(8),d(8),d(8),d(8))
+                    contentDescription="Ouvrir $label en flottant ; appui long pour retirer"
+                    setOnClickListener { openSession(value,label) }
+                    setOnLongClickListener {
+                        val next=pins.getStringSet("apps",emptySet()).orEmpty().toMutableSet();next.remove(value)
+                        pins.edit().putStringSet("apps",next).apply();showDock();true
+                    }
+                },LinearLayout.LayoutParams(d(48),d(48)))
+            } catch(_:android.content.pm.PackageManager.NameNotFoundException) { }
+        }
+        row.addView(Ui.icon(this,"×","Masquer la barre de raccourcis") { dock?.let { wm.removeView(it) };dock=null;if(sessions.isEmpty()) stopSelf() })
+        val scroll=HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled=false;addView(row) }
+        dock=scroll
+        val width=wm.maximumWindowMetrics.bounds.width()
+        dockParams=WindowManager.LayoutParams((row.childCount*d(48)+d(12)).coerceAtMost(width-d(16)),d(56),
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM,
+            android.graphics.PixelFormat.TRANSLUCENT).apply { gravity=Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL;y=d(8) }
+        wm.addView(scroll,dockParams)
+    }
+    override fun onConfigurationChanged(newConfig:android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+        sessions.values.toList().forEach { it.configurationChanged() }
+        if(dock!=null) showDock()
+    }
+    override fun onDestroy() {
+        sessions.values.toList().forEach { it.dispose() };sessions.clear()
+        dock?.let { wm.removeView(it) };dock=null
+        io.shutdown();stopForeground(STOP_FOREGROUND_REMOVE);super.onDestroy()
+    }
+    override fun onBind(intent:Intent?):IBinder?=null
+
+    private inner class WindowSession(private val key:String,private val component:String?,private val label:String) {
     private var root: LinearLayout? = null
     private var bubble: View? = null
     private var params = WindowManager.LayoutParams()
     private var bubbleParams = WindowManager.LayoutParams()
     private var host: DirectWindowBridge? = null
     private var texture: TextureView? = null
-    private var component: String? = null
-    private var label = "Démo interactive"
     private var screenW = 1
     private var screenH = 1
     private var renderW = 1
@@ -48,35 +141,14 @@ class FloatingService : Service() {
         }
     }
 
-    override fun onCreate() {
-        super.onCreate()
-        wm=getSystemService(WindowManager::class.java)
-        val channel = NotificationChannel("windows","Fenêtre flottante",NotificationManager.IMPORTANCE_LOW)
-        getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
-        val open = PendingIntent.getActivity(this,0,Intent(this,MainActivity::class.java),PendingIntent.FLAG_IMMUTABLE)
-        val stop = PendingIntent.getService(this,1,Intent(this,FloatingService::class.java).setAction("STOP"),PendingIntent.FLAG_IMMUTABLE)
-        val notification = Notification.Builder(this,"windows").setSmallIcon(com.josias.floatx.R.drawable.ic_floatx)
-            .setContentTitle("FloatX · fenêtre active").setContentText("Appuie pour revenir aux commandes.")
-            .setContentIntent(open).setOngoing(true).addAction(Notification.Action.Builder(null,"Tout fermer",stop).build()).build()
-        if (Build.VERSION.SDK_INT >= 34) startForeground(1,notification,ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
-        else startForeground(1,notification)
-    }
-
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == "STOP" || !Settings.canDrawOverlays(this)) { stopSelf(); return START_NOT_STICKY }
-        if (root != null) { toast("Ferme la fenêtre actuelle avant d’en ouvrir une autre."); return START_NOT_STICKY }
-        component=intent?.getStringExtra("component")
-        label=intent?.getStringExtra("label") ?: "Démo interactive"
+    private val resizeUpdate=Runnable { resizeDisplay() }
+    fun start() {
+        if(component!=null) host=DirectWindowBridge(this@FloatingService)
         createWindow()
-        if (component != null) {
-            main.postDelayed(startupTimeout,25_000)
-            host=DirectWindowBridge(this)
-            maybeOpen()
-        }
-        return START_NOT_STICKY
+        if(component!=null) { main.postDelayed(startupTimeout,25_000);maybeOpen() }
     }
 
-    private fun d(value:Int)=Ui.dp(this,value)
+    private fun d(value:Int)=Ui.dp(this@FloatingService,value)
     private fun measureScreen() {
         val metrics=wm.maximumWindowMetrics
         val bars=metrics.windowInsets.getInsetsIgnoringVisibility(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
@@ -86,7 +158,7 @@ class FloatingService : Service() {
     private fun windowParams(width:Int,height:Int)=WindowManager.LayoutParams(width,height,
         WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
         WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-            WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
+            WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED or WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM,
         android.graphics.PixelFormat.TRANSLUCENT).apply {
         gravity=Gravity.TOP or Gravity.START
         softInputMode=WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
@@ -95,14 +167,14 @@ class FloatingService : Service() {
     @SuppressLint("ClickableViewAccessibility")
     private fun createWindow() {
         measureScreen()
-        params=windowParams((screenW*.88).toInt(),(screenH*.66).toInt()).apply { x=d(16); y=d(70) }
-        val panel=LinearLayout(this).apply {
+        params=windowParams((screenW*.88).toInt(),(screenH*.66).toInt()).apply { x=d(12)+(sessions.size-1)*d(20); y=d(50)+(sessions.size-1)*d(32) }
+        val panel=LinearLayout(this@FloatingService).apply {
             orientation=LinearLayout.VERTICAL; background=Ui.rounded(this@FloatingService,Color.WHITE,24)
             clipToOutline=true; elevation=d(14).toFloat()
         }
         root=panel
-        val header=LinearLayout(this).apply { gravity=Gravity.CENTER_VERTICAL; setPadding(d(8),0,d(2),0) }
-        val drag=Ui.text(this,"━━  $label",13f,Ui.MUTED,true).apply {
+        val header=LinearLayout(this@FloatingService).apply { gravity=Gravity.CENTER_VERTICAL; setPadding(d(8),0,d(2),0) }
+        val drag=Ui.text(this@FloatingService,"━━  $label",13f,Ui.MUTED,true).apply {
             maxLines=1; ellipsize=android.text.TextUtils.TruncateAt.END
             gravity=Gravity.CENTER_VERTICAL
             layoutParams=LinearLayout.LayoutParams(0,d(48),1f)
@@ -110,21 +182,21 @@ class FloatingService : Service() {
         }
         drag.setOnTouchListener(gesture { dx,dy -> params.x+=dx;params.y+=dy; updateWindow() })
         header.addView(drag)
-        header.addView(Ui.icon(this,"−","Réduire en bulle") { minimize() })
-        header.addView(Ui.icon(this,"⛶","Agrandir ou restaurer la fenêtre") { toggleSize() })
-        header.addView(Ui.icon(this,"×","Fermer la fenêtre") { stopSelf() })
+        header.addView(Ui.icon(this@FloatingService,"−","Réduire en bulle") { minimize() })
+        header.addView(Ui.icon(this@FloatingService,"⛶","Agrandir ou restaurer la fenêtre") { toggleSize() })
+        header.addView(Ui.icon(this@FloatingService,"×","Fermer la fenêtre") { closeSession(key) })
         panel.addView(header)
         if (component==null) createDemo(panel) else createAppSurface(panel)
-        val footer=LinearLayout(this).apply { gravity=Gravity.CENTER_VERTICAL }
+        val footer=LinearLayout(this@FloatingService).apply { gravity=Gravity.CENTER_VERTICAL }
         if (component!=null) {
-            footer.addView(Ui.icon(this,"‹","Retour dans l’application") { remote { back() } })
+            footer.addView(Ui.icon(this@FloatingService,"‹","Retour dans l’application") { remote { back() } })
         }
-        footer.addView(Ui.text(this,if(component==null) "DÉMO · conversation fictive" else "FLOATX",10f,Ui.MUTED).apply {
+        footer.addView(Ui.text(this@FloatingService,if(component==null) "DÉMO · conversation fictive" else "FLOATX",10f,Ui.MUTED).apply {
             setPadding(d(10),0,0,0); layoutParams=LinearLayout.LayoutParams(0,d(36),1f); gravity=Gravity.CENTER_VERTICAL
         })
-        val resize=Ui.icon(this,"◢","Glisser pour redimensionner") {}.apply { setTextColor(Ui.GREEN) }
+        val resize=Ui.icon(this@FloatingService,"◢","Glisser pour redimensionner") {}.apply { setTextColor(Ui.GREEN) }
         resize.setOnTouchListener(gesture(onEnd={ resizeDisplay() }) { dx,dy ->
-            full=false; params.width+=dx;params.height+=dy;updateWindow()
+            full=false; params.width+=dx;params.height+=dy;updateWindow();scheduleResize()
         })
         footer.addView(resize)
         panel.addView(footer)
@@ -133,14 +205,14 @@ class FloatingService : Service() {
     }
 
     private fun createDemo(panel: LinearLayout) {
-        val area=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setPadding(d(16),d(16),d(16),d(10)); setBackgroundColor(0xFFF4F0E6.toInt()) }
+        val area=LinearLayout(this@FloatingService).apply { orientation=LinearLayout.VERTICAL; setPadding(d(16),d(16),d(16),d(10)); setBackgroundColor(0xFFF4F0E6.toInt()) }
         panel.addView(area,LinearLayout.LayoutParams(-1,0,1f))
-        area.addView(Ui.text(this,"Alex · conversation de démo",16f,bold=true))
-        val messages=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setPadding(0,d(20),0,0) }
-        val scroll=ScrollView(this).apply { addView(messages) }
+        area.addView(Ui.text(this@FloatingService,"Alex · conversation de démo",16f,bold=true))
+        val messages=LinearLayout(this@FloatingService).apply { orientation=LinearLayout.VERTICAL; setPadding(0,d(20),0,0) }
+        val scroll=ScrollView(this@FloatingService).apply { addView(messages) }
         area.addView(scroll,LinearLayout.LayoutParams(-1,0,1f))
         fun addMessage(value:String, outgoing:Boolean) {
-            messages.addView(Ui.text(this,value,15f).apply {
+            messages.addView(Ui.text(this@FloatingService,value,15f).apply {
                 setPadding(d(12),d(10),d(12),d(10))
                 background=Ui.rounded(this@FloatingService,if(outgoing) 0xFFD7F7C5.toInt() else Color.WHITE,14)
                 layoutParams=LinearLayout.LayoutParams(-2,-2).apply {
@@ -151,15 +223,15 @@ class FloatingService : Service() {
         }
         addMessage("On se retrouve à 18 h ?",true)
         addMessage("Oui, parfait !",false)
-        val inputRow=LinearLayout(this).apply { gravity=Gravity.CENTER_VERTICAL }
-        val input=EditText(this).apply {
+        val inputRow=LinearLayout(this@FloatingService).apply { gravity=Gravity.CENTER_VERTICAL }
+        val input=EditText(this@FloatingService).apply {
             hint="Message de démo…"; textSize=14f; setSingleLine(true)
             setOnFocusChangeListener { _, focused -> if(focused) focusWindow() }
             setOnTouchListener { _,_ -> focusWindow();false }
             layoutParams=LinearLayout.LayoutParams(0,d(48),1f)
         }
         inputRow.addView(input)
-        inputRow.addView(Ui.icon(this,"➤","Envoyer le message de démo") {
+        inputRow.addView(Ui.icon(this@FloatingService,"➤","Envoyer le message de démo") {
             val value=input.text.toString().trim()
             if(value.isNotEmpty()) { addMessage(value,true); input.setText("") }
         })
@@ -168,12 +240,12 @@ class FloatingService : Service() {
 
     @SuppressLint("ClickableViewAccessibility")
     private fun createAppSurface(panel:LinearLayout) {
-        val frame=FrameLayout(this).apply { setBackgroundColor(0xFFF1F3EF.toInt()) }
+        val frame=FrameLayout(this@FloatingService).apply { setBackgroundColor(0xFFF1F3EF.toInt()) }
         panel.addView(frame,LinearLayout.LayoutParams(-1,0,1f))
-        val view=TextureView(this)
+        val view=TextureView(this@FloatingService)
         texture=view
         frame.addView(view,FrameLayout.LayoutParams(-1,-1))
-        status=Ui.text(this,"Connexion à l’accès système…",14f,Ui.MUTED).apply {
+        status=Ui.text(this@FloatingService,"Connexion à l’accès système…",14f,Ui.MUTED).apply {
             gravity=Gravity.CENTER; setPadding(d(16),d(16),d(16),d(16));setBackgroundColor(0xFFF1F3EF.toInt())
         }
         frame.addView(status,FrameLayout.LayoutParams(-1,-1))
@@ -183,7 +255,7 @@ class FloatingService : Service() {
                 status?.text=if(host==null) "Affichage prêt · connexion au moteur Shizuku…" else "Moteur connecté · ouverture de l’appli…"
                 maybeOpen()
             }
-            override fun onSurfaceTextureSizeChanged(st:SurfaceTexture,w:Int,h:Int) {}
+            override fun onSurfaceTextureSizeChanged(st:SurfaceTexture,w:Int,h:Int) { scheduleResize() }
             override fun onSurfaceTextureUpdated(st:SurfaceTexture) {}
             override fun onSurfaceTextureDestroyed(st:SurfaceTexture):Boolean = true
         }
@@ -207,13 +279,14 @@ class FloatingService : Service() {
         if(ready || surface!=null) return
         if (failed) return
         status?.text="Moteur connecté · ouverture de l’appli…"
-        renderW=(view.width*2).coerceAtLeast(2);renderH=(view.height*2).coerceAtLeast(2)
+        val size=RenderSizing.forWindow(view.width,view.height,resources.displayMetrics.densityDpi)
+        renderW=size.width;renderH=size.height
         st.setDefaultBufferSize(renderW,renderH)
         val nextSurface=Surface(st);surface=nextSurface
         val token=generation
         io.execute {
             try {
-                target.open(nextSurface,renderW,renderH,(resources.displayMetrics.densityDpi*2).coerceAtMost(640),app) { stage ->
+                target.open(nextSurface,renderW,renderH,size.dpi,app) { stage ->
                     main.post { if (token==generation && !failed) status?.text=stage }
                 }
                 main.post { if(token==generation && !failed) {
@@ -224,14 +297,18 @@ class FloatingService : Service() {
             } catch(e:Exception) { main.post { if(token==generation) fail("Ouverture refusée : ${e.message}") } }
         }
     }
+    private fun scheduleResize() {
+        main.removeCallbacks(resizeUpdate);main.postDelayed(resizeUpdate,80)
+    }
     private fun resizeDisplay() {
         if(!ready) return
         texture?.post {
             val view=texture ?: return@post
-            renderW=(view.width*2).coerceAtLeast(2);renderH=(view.height*2).coerceAtLeast(2)
+            val size=RenderSizing.forWindow(view.width,view.height,resources.displayMetrics.densityDpi)
+            renderW=size.width;renderH=size.height
             view.surfaceTexture?.setDefaultBufferSize(renderW,renderH)
             val w=renderW; val h=renderH
-            remote { resize(w,h,(resources.displayMetrics.densityDpi*2).coerceAtMost(640)) }
+            remote { resize(w,h,size.dpi) }
         }
     }
     private fun remote(action:DirectWindowBridge.()->Unit) {
@@ -239,11 +316,11 @@ class FloatingService : Service() {
         io.execute { try { action(target) } catch(e:Exception) { main.post { toast("Commande refusée : ${e.message}") } } }
     }
     private fun focusWindow() {
-        params.flags=params.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv()
+        params.flags=params.flags and (WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM).inv()
         root?.let { wm.updateViewLayout(it,params) }
     }
     private fun updateWindow() {
-        val box=WindowGeometry.clamp(WindowBox(params.x,params.y,params.width,params.height),screenW,screenH,d(260),d(300))
+        val box=WindowGeometry.clamp(WindowBox(params.x,params.y,params.width,params.height),screenW,screenH,d(180),d(200))
         params.x=box.x;params.y=box.y;params.width=box.width;params.height=box.height
         root?.let { if(it.isAttachedToWindow) wm.updateViewLayout(it,params) }
     }
@@ -263,7 +340,7 @@ class FloatingService : Service() {
         params.alpha=0f
         params.flags=params.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
         root?.let { wm.updateViewLayout(it,params) }
-        val b=FrameLayout(this).apply {
+        val b=FrameLayout(this@FloatingService).apply {
             background=Ui.rounded(this@FloatingService,Ui.GREEN,28)
             elevation=d(8).toFloat();contentDescription="Rouvrir $label ; glisser pour déplacer la bulle"
             setOnClickListener { restore() }
@@ -272,10 +349,10 @@ class FloatingService : Service() {
             try { packageManager.getActivityIcon(it) } catch (_: android.content.pm.PackageManager.NameNotFoundException) { null }
         }
         if(icon!=null) {
-            b.addView(ImageView(this).apply { setImageDrawable(icon) },FrameLayout.LayoutParams(d(36),d(36),Gravity.CENTER))
-        } else b.addView(Ui.text(this,"F",24f,Color.WHITE,true).apply { gravity=Gravity.CENTER },FrameLayout.LayoutParams(-1,-1))
+            b.addView(ImageView(this@FloatingService).apply { setImageDrawable(icon) },FrameLayout.LayoutParams(d(36),d(36),Gravity.CENTER))
+        } else b.addView(Ui.text(this@FloatingService,"F",24f,Color.WHITE,true).apply { gravity=Gravity.CENTER },FrameLayout.LayoutParams(-1,-1))
         bubble=b
-        bubbleParams=windowParams(d(56),d(56)).apply { x=screenW-d(60);y=params.y.coerceIn(0,(screenH-d(56)).coerceAtLeast(0)) }
+        bubbleParams=windowParams(d(56),d(56)).apply { x=screenW-d(60);y=(d(70)+sessions.keys.indexOf(key)*d(64)).coerceIn(0,(screenH-d(56)).coerceAtLeast(0)) }
         b.setOnTouchListener(gesture(onEnd={
             bubbleParams.x=if(bubbleParams.x+ d(28)< screenW/2) d(4) else screenW-d(60)
             bubble?.let { wm.updateViewLayout(it,bubbleParams) }
@@ -286,7 +363,7 @@ class FloatingService : Service() {
         })
         wm.addView(b,bubbleParams)
     }
-    private fun restore() {
+    fun restore() {
         bubble?.let { wm.removeView(it) };bubble=null;minimized=false
         params.alpha=1f;params.flags=params.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
         root?.let { wm.updateViewLayout(it,params) }
@@ -294,7 +371,7 @@ class FloatingService : Service() {
     @SuppressLint("ClickableViewAccessibility")
     private fun gesture(onEnd:()->Unit={},onClick:()->Unit={},move:(Int,Int)->Unit):View.OnTouchListener {
         var lastX=0f;var lastY=0f;var startX=0f;var startY=0f;var moved=false
-        val slop=ViewConfiguration.get(this).scaledTouchSlop
+        val slop=ViewConfiguration.get(this@FloatingService).scaledTouchSlop
         return View.OnTouchListener { v,e ->
             when(e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> { startX=e.rawX;startY=e.rawY;lastX=e.rawX;lastY=e.rawY;moved=false;true }
@@ -313,25 +390,29 @@ class FloatingService : Service() {
         failed=true;main.removeCallbacks(startupTimeout)
         ready=false;status?.apply { text=message;visibility=View.VISIBLE };toast(message)
     }
-    private fun toast(value:String) { Toast.makeText(this,value,Toast.LENGTH_LONG).show() }
-    override fun onConfigurationChanged(newConfig:android.content.res.Configuration) {
-        super.onConfigurationChanged(newConfig);measureScreen();updateWindow()
+    private fun toast(value:String) { Toast.makeText(this@FloatingService,value,Toast.LENGTH_LONG).show() }
+    fun configurationChanged() {
+        measureScreen();updateWindow();scheduleResize()
         bubble?.let { bubbleParams.x=(screenW-d(60)).coerceAtLeast(0);bubbleParams.y=bubbleParams.y.coerceIn(0,(screenH-d(56)).coerceAtLeast(0));wm.updateViewLayout(it,bubbleParams) }
     }
-    override fun onDestroy() {
+    fun dispose() {
+        main.removeCallbacks(resizeUpdate)
         main.removeCallbacks(startupTimeout)
         failed=true
         generation++;ready=false
         val target=host;host=null
+        val ownedSurface=surface;surface=null
         bubble?.let { wm.removeView(it) };bubble=null
         root?.let { wm.removeView(it) };root=null
         io.execute {
             try { target?.close() } catch (_:Exception) { }
             finally {
-                surface?.release();surface=null
+                ownedSurface?.release()
             }
         }
-        io.shutdown();stopForeground(STOP_FOREGROUND_REMOVE);super.onDestroy()
+
     }
-    override fun onBind(intent:Intent?):IBinder?=null
+
+}
+
 }

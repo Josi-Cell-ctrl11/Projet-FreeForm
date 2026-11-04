@@ -7,8 +7,8 @@ android {
         applicationId = "com.josias.floatx"
         minSdk = 30
         targetSdk = 35
-        versionCode = 6
-        versionName = "0.3.1-trusted"
+        versionCode = 7
+        versionName = "0.4.0"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
