@@ -53,13 +53,12 @@ abstract class AppTileService : TileService() {
         super.onClick()
         if(isLocked) unlockAndRun { open() } else open()
     }
-    @Suppress("DEPRECATION")
     private fun open() {
         val intent=Intent(this,TileLaunchActivity::class.java).putExtra("tile_slot",slot)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         if(Build.VERSION.SDK_INT>=34) startActivityAndCollapse(PendingIntent.getActivity(this,slot,intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
-        else startActivityAndCollapse(intent)
+        else startActivity(intent)
     }
 }
 class AppTileOne:AppTileService() { override val slot=1 }
