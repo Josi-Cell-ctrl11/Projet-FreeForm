@@ -1,3 +1,7 @@
+# FloatX 0.4.1 — cadre discret
+
+La barre inférieure FLOATX est supprimée. Le contenu occupe tout le bas du cadre, avec des coins de 12 dp. La barre supérieure passe de 48 à 36 dp et le bouton retour rejoint les commandes du haut. Le redimensionnement reste disponible en glissant le coin inférieur droit, sans triangle ni bande inférieure. Les fenêtres multiples, raccourcis et réglages du clavier de 0.4.0 sont conservés.
+
 # FloatX 0.4.0
 
 Cette version ajoute plusieurs fenêtres indépendantes et une barre flottante de raccourcis.

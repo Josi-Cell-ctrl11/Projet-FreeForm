@@ -32,7 +32,7 @@ class MainActivity : Activity() {
         val scroll=ScrollView(this).apply { setBackgroundColor(0xFFF8F7F2.toInt());isFillViewport=true }
         val page=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL;setPadding(d(24),d(24),d(24),d(36)) }
         scroll.addView(page)
-        page.addView(Ui.text(this,"FLOATX  /  0.4.0 · MULTIFENÊTRES",12f,Ui.GREEN,true))
+        page.addView(Ui.text(this,"FLOATX  /  0.4.1 · MULTIFENÊTRES",12f,Ui.GREEN,true))
         page.addView(Ui.text(this,"Tes applis,\nen flottant.",38f,bold=true).apply { setPadding(0,d(16),0,d(12)) })
         page.addView(Ui.text(this,"Tes applis dans des fenêtres flottantes.",17f,Ui.MUTED))
         val card=LinearLayout(this).apply {

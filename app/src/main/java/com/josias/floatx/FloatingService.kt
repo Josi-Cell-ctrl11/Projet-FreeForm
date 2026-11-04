@@ -114,7 +114,7 @@ class FloatingService : Service() {
     override fun onBind(intent:Intent?):IBinder?=null
 
     private inner class WindowSession(private val key:String,private val component:String?,private val label:String) {
-    private var root: LinearLayout? = null
+    private var root: FrameLayout? = null
     private var bubble: View? = null
     private var params = WindowManager.LayoutParams()
     private var bubbleParams = WindowManager.LayoutParams()
@@ -168,38 +168,44 @@ class FloatingService : Service() {
     private fun createWindow() {
         measureScreen()
         params=windowParams((screenW*.88).toInt(),(screenH*.66).toInt()).apply { x=d(12)+(sessions.size-1)*d(20); y=d(50)+(sessions.size-1)*d(32) }
-        val panel=LinearLayout(this@FloatingService).apply {
-            orientation=LinearLayout.VERTICAL; background=Ui.rounded(this@FloatingService,Color.WHITE,24)
-            clipToOutline=true; elevation=d(14).toFloat()
+        val panel=FrameLayout(this@FloatingService).apply {
+            background=Ui.rounded(this@FloatingService,Color.WHITE,12)
+            clipToOutline=true; elevation=d(10).toFloat()
         }
         root=panel
-        val header=LinearLayout(this@FloatingService).apply { gravity=Gravity.CENTER_VERTICAL; setPadding(d(8),0,d(2),0) }
-        val drag=Ui.text(this@FloatingService,"━━  $label",13f,Ui.MUTED,true).apply {
-            maxLines=1; ellipsize=android.text.TextUtils.TruncateAt.END
+        val column=LinearLayout(this@FloatingService).apply { orientation=LinearLayout.VERTICAL }
+        panel.addView(column,FrameLayout.LayoutParams(-1,-1))
+        val header=LinearLayout(this@FloatingService).apply {
+            gravity=Gravity.CENTER_VERTICAL;setPadding(d(8),0,d(2),0)
+            setBackgroundColor(0xFFF7F8F5.toInt())
+        }
+        val drag=Ui.text(this@FloatingService,label,12f,Ui.MUTED).apply {
+            maxLines=1;ellipsize=android.text.TextUtils.TruncateAt.END
             gravity=Gravity.CENTER_VERTICAL
-            layoutParams=LinearLayout.LayoutParams(0,d(48),1f)
-            contentDescription="Poignée : glisser pour déplacer la fenêtre"
+            layoutParams=LinearLayout.LayoutParams(0,d(36),1f)
+            contentDescription="Glisser pour déplacer $label"
         }
-        drag.setOnTouchListener(gesture { dx,dy -> params.x+=dx;params.y+=dy; updateWindow() })
+        drag.setOnTouchListener(gesture { dx,dy -> params.x+=dx;params.y+=dy;updateWindow() })
         header.addView(drag)
-        header.addView(Ui.icon(this@FloatingService,"−","Réduire en bulle") { minimize() })
-        header.addView(Ui.icon(this@FloatingService,"⛶","Agrandir ou restaurer la fenêtre") { toggleSize() })
-        header.addView(Ui.icon(this@FloatingService,"×","Fermer la fenêtre") { closeSession(key) })
-        panel.addView(header)
-        if (component==null) createDemo(panel) else createAppSurface(panel)
-        val footer=LinearLayout(this@FloatingService).apply { gravity=Gravity.CENTER_VERTICAL }
-        if (component!=null) {
-            footer.addView(Ui.icon(this@FloatingService,"‹","Retour dans l’application") { remote { back() } })
+        fun control(symbol:String,description:String,action:()->Unit) {
+            header.addView(Ui.icon(this@FloatingService,symbol,description,action).apply {
+                textSize=19f;layoutParams=LinearLayout.LayoutParams(d(32),d(36))
+            })
         }
-        footer.addView(Ui.text(this@FloatingService,if(component==null) "DÉMO · conversation fictive" else "FLOATX",10f,Ui.MUTED).apply {
-            setPadding(d(10),0,0,0); layoutParams=LinearLayout.LayoutParams(0,d(36),1f); gravity=Gravity.CENTER_VERTICAL
-        })
-        val resize=Ui.icon(this@FloatingService,"◢","Glisser pour redimensionner") {}.apply { setTextColor(Ui.GREEN) }
+        if(component!=null) control("‹","Retour dans l’application") { remote { back() } }
+        control("−","Réduire en bulle") { minimize() }
+        control("⛶","Agrandir ou restaurer la fenêtre") { toggleSize() }
+        control("×","Fermer la fenêtre") { closeSession(key) }
+        column.addView(header,LinearLayout.LayoutParams(-1,d(36)))
+        if(component==null) createDemo(column) else createAppSurface(column)
+        // No footer: the app extends to the rounded bottom edge. Keep the resize gesture.
+        val resize=View(this@FloatingService).apply {
+            contentDescription="Coin inférieur droit : glisser pour redimensionner"
+        }
         resize.setOnTouchListener(gesture(onEnd={ resizeDisplay() }) { dx,dy ->
-            full=false; params.width+=dx;params.height+=dy;updateWindow();scheduleResize()
+            full=false;params.width+=dx;params.height+=dy;updateWindow();scheduleResize()
         })
-        footer.addView(resize)
-        panel.addView(footer)
+        panel.addView(resize,FrameLayout.LayoutParams(d(24),d(24),Gravity.BOTTOM or Gravity.END))
         wm.addView(panel,params)
         updateWindow()
     }
