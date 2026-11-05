@@ -1,3 +1,11 @@
+# FloatX 1.0.0
+
+L’accueil présente l’état de connexion, l’ouverture d’une appli, l’organisation de quatre applis et les favoris avec leurs logos. La barre flottante et le centre de contrôle restent directement accessibles. Les réglages regroupent la connexion Shizuku, la démo, le mode système de secours, le diagnostic et la fermeture de toutes les fenêtres.
+
+La version stable utilise une clé permanente privée. Le certificat public est conservé dans `signing/` ; la procédure GitHub Actions est décrite dans `signing/README.md`. Les aperçus sont séparés du paquet stable et ne servent pas à la distribution des mises à jour.
+
+Fonctions validées sur Infinix par l’utilisateur avant cette préparation : plusieurs applis, quatre coins redimensionnables, priorité au toucher, bulles, clavier externe, retour à l’accueil de l’appli, tuiles du centre de contrôle et dispositions. Le moteur reste local et dépend de Shizuku actif. La nouvelle présentation et l’installation de la version signée nécessitent une vérification sur téléphone.
+
 # FloatX 0.5.1 — logos lisibles dans les tuiles
 
 Les raccourcis du centre de contrôle utilisent le logo monochrome de l’icône adaptative lorsqu’il existe, puis son premier plan. Pour les icônes anciennes à fond uni, ce fond est retiré du masque ; les transparences du logo sont conservées. Le nom et les icônes des tuiles sont rafraîchis au retour dans FloatX. XOS garde la maîtrise de la couleur des tuiles : la couleur d’origine du logo n’est pas garantie par l’API Android (https://developer.android.com/develop/ui/views/quicksettings-tiles).

@@ -9,7 +9,7 @@
         <package android:name="com.android.shell" />
         <intent><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent>
     </queries>
-    <application android:label="FloatX" android:icon="@drawable/ic_floatx"
+    <application android:label="${appLabel}" android:icon="@drawable/ic_floatx"
         android:theme="@style/AppTheme" android:allowBackup="false" android:supportsRtl="true"
         android:hardwareAccelerated="true">
         <activity android:name=".MainActivity" android:exported="true">

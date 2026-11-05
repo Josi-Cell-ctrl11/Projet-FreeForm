@@ -33,20 +33,26 @@ jobs:
       - name: Installer le SDK
         run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
       - name: Compiler, tester et analyser
-        run: gradle --no-daemon testDebugUnitTest lintDebug assembleDebug
-      - name: Préparer l’APK
+        run: gradle --no-daemon testDebugUnitTest lintDebug lintRelease assembleDebug assembleRelease
+      - name: Préparer l’aperçu et les entrées de signature
         run: |
-          mkdir -p dist
-          cp app/build/outputs/apk/debug/app-debug.apk dist/FloatX-0.5.1-debug.apk
-          cd dist
-          sha256sum FloatX-0.5.1-debug.apk > SHA256SUMS.txt
-      - name: Télécharger l’APK depuis les artefacts
+          mkdir -p dist/preview dist/signing-inputs
+          cp app/build/outputs/apk/debug/app-debug.apk dist/preview/FloatX-1.0.0-preview.apk
+          cp app/build/outputs/apk/release/app-release-unsigned.apk dist/signing-inputs/FloatX-1.0.0-unsigned.apk
+          cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" dist/signing-inputs/
+          if [ -f "$ANDROID_HOME/build-tools/35.0.0/NOTICE" ]; then cp "$ANDROID_HOME/build-tools/35.0.0/NOTICE" dist/signing-inputs/TOOLCHAIN-NOTICE.txt; fi
+      - name: APK d’aperçu, signature de test
         uses: actions/upload-artifact@v4
         with:
-          name: FloatX-APK
-          path: dist/
-          if-no-files-found: error
+          name: FloatX-apercu
+          path: dist/preview/
           retention-days: 14
+      - name: Entrées de signature, APK non installable
+        uses: actions/upload-artifact@v4
+        with:
+          name: FloatX-signing-inputs
+          path: dist/signing-inputs/
+          retention-days: 3
       - name: Rapports de validation
         if: always()
         uses: actions/upload-artifact@v4
@@ -55,4 +61,5 @@ jobs:
           path: |
             app/build/reports/tests/
             app/build/reports/lint-results-debug.html
+            app/build/reports/lint-results-release.html
           if-no-files-found: ignore
