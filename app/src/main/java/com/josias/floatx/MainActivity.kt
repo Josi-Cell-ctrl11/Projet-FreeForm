@@ -32,7 +32,7 @@ class MainActivity : Activity() {
         val scroll=ScrollView(this).apply { setBackgroundColor(0xFFF8F7F2.toInt());isFillViewport=true }
         val page=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL;setPadding(d(24),d(24),d(24),d(36)) }
         scroll.addView(page)
-        page.addView(Ui.text(this,"FLOATX  /  0.5.0 · MULTIFENÊTRES",12f,Ui.GREEN,true))
+        page.addView(Ui.text(this,"FLOATX  /  0.5.1 · MULTIFENÊTRES",12f,Ui.GREEN,true))
         page.addView(Ui.text(this,"Tes applis,\nen flottant.",38f,bold=true).apply { setPadding(0,d(16),0,d(12)) })
         page.addView(Ui.text(this,"Tes applis dans des fenêtres flottantes.",17f,Ui.MUTED))
         val card=LinearLayout(this).apply {
@@ -112,6 +112,7 @@ class MainActivity : Activity() {
         val shizuku=if(!Shizuku.pingBinder()) "à démarrer" else if(Shizuku.checkSelfPermission()==PackageManager.PERMISSION_GRANTED) "connecté et autorisé" else "autorisation FloatX requise"
         status.text="${Build.MANUFACTURER} ${Build.MODEL} · Android ${Build.VERSION.RELEASE}\nShizuku : $shizuku\nFenêtres libres : ${if(setting||feature) "signalées par Android" else "à vérifier par le test"}"
         report.text=NativeFreeformLauncher.last(this)
+        (0..4).forEach { AppTiles.refresh(this,it) }
     }
     private fun requestRounded() {
         if(Build.VERSION.SDK_INT<34) { message("Le cadre Shizuku direct nécessite Android 14 ou supérieur.");return }

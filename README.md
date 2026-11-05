@@ -1,3 +1,9 @@
+# FloatX 0.5.1 — logos lisibles dans les tuiles
+
+Les raccourcis du centre de contrôle utilisent le logo monochrome de l’icône adaptative lorsqu’il existe, puis son premier plan. Pour les icônes anciennes à fond uni, ce fond est retiré du masque ; les transparences du logo sont conservées. Le nom et les icônes des tuiles sont rafraîchis au retour dans FloatX. XOS garde la maîtrise de la couleur des tuiles : la couleur d’origine du logo n’est pas garantie par l’API Android (https://developer.android.com/develop/ui/views/quicksettings-tiles).
+
+Le menu « Épingler / Verrouiller » de l’écran des applications récentes appartient au lanceur XOS. Cette version ne prétend pas y injecter de commande. Réduire une fenêtre FloatX en bulle reste disponible dans son propre menu ⋯ ; ouvrir une appli en flottant reste accessible par les raccourcis du centre de contrôle.
+
 # FloatX 0.5.0 — centre de contrôle et dispositions
 
 Dans FloatX, « Configurer le centre de contrôle » associe quatre raccourcis à des applis. Accepter l’ajout proposé par Android, ou ouvrir le centre de contrôle → Modifier et ajouter FloatX 1 à 4. Le nom et l’icône suivent l’application choisie. Chaque appui replie le panneau et ouvre/restaure l’appli en flottant. La tuile « FloatX · Choisir » permet de choisir une appli à chaque fois. Shizuku et l’autorisation d’affichage flottant doivent être prêts ; sinon FloatX ouvre la configuration. L’affichage des tuiles et leur ajout dépendent du panneau XOS.

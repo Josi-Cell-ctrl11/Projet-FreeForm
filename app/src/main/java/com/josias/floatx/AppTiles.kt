@@ -7,6 +7,7 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.Icon
+import android.graphics.drawable.AdaptiveIconDrawable
 import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
@@ -28,10 +29,16 @@ object AppTiles {
     fun icon(context:Context,slot:Int):Icon {
         val target=target(context,slot) ?: return Icon.createWithResource(context,R.drawable.ic_floatx)
         return try {
-            val drawable=context.packageManager.getActivityIcon(target)
+            val launcher=context.packageManager.getActivityIcon(target)
+            val drawable=if(launcher is AdaptiveIconDrawable) {
+                (if(Build.VERSION.SDK_INT>=33) launcher.monochrome else null) ?: launcher.foreground
+            } else launcher
             val bitmap=Bitmap.createBitmap(96,96,Bitmap.Config.ARGB_8888)
             drawable.setBounds(0,0,96,96);drawable.draw(Canvas(bitmap))
-            Icon.createWithBitmap(bitmap)
+            val pixels=IntArray(96*96)
+            bitmap.getPixels(pixels,0,96,0,0,96,96)
+            val glyph=Bitmap.createBitmap(TileGlyph.mask(pixels,96,96),96,96,Bitmap.Config.ARGB_8888)
+            Icon.createWithBitmap(glyph)
         } catch(_:android.content.pm.PackageManager.NameNotFoundException) {
             Icon.createWithResource(context,R.drawable.ic_floatx)
         }
