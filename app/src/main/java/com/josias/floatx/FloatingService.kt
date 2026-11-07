@@ -46,7 +46,7 @@ class FloatingService : Service() {
         workspaceListeners.values.toList().forEach { it() }
     }
     fun workspaceEntries():List<WorkspaceEntry> = sessions.values.map { it.entry() }
-    fun hasWindows()=sessions.isNotEmpty() && !stopping
+    fun isWorkspaceClosed()=stopping
     fun restoreWindow(key:String) { sessions[key]?.restore() }
     fun workspacePreview():Bitmap? {
         if(sessions.isEmpty()) return null

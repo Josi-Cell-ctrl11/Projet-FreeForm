@@ -125,7 +125,7 @@ class FloatingWorkspaceActivity:Activity() {
         }
         if(entries.isEmpty()) {
             windows.addView(Ui.button(this,"Ouvrir FloatX") { startActivity(Intent(this,MainActivity::class.java)) })
-            if(active!=null && !active.hasWindows()) {
+            if(active?.isWorkspaceClosed()==true) {
                 // The group has been closed, or its service has stopped; remove its stale card.
                 finishAndRemoveTask()
             }
