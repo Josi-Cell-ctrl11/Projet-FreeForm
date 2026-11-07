@@ -1,3 +1,81 @@
+# FloatX 1.0.2 — barre discrète, fenêtres flottantes classiques
+
+La poignée ⋯ est remplacée par une petite barre centrée en haut de chaque fenêtre (36 × 4 dp, zone tactile invisible plus large). Glisser déplace la fenêtre ; toucher ouvre les commandes. Une bande de 18 dp réserve la place de la poignée. L’option « Retour dans l’application » est retirée du menu. Les dispositions, bulles et quatre coins de redimensionnement sont conservés.
+
+Le regroupement dans une carte « FloatX · Fenêtres » est supprimé à la demande de l’utilisateur. La touche Carré / Applications récentes retrouve son fonctionnement habituel : les fenêtres flottantes ne sont plus masquées ou restaurées par une activité de groupe. Ouvrir une appli depuis l’accueil, la barre ou une tuile utilise directement le service flottant, comme avant. La notification revient aux commandes de FloatX.
+
+Version `1.0.2`, `versionCode 102`. Le paquet stable, le certificat permanent et les préférences existantes sont conservés. Les aperçus gardent leur paquet distinct ; ne pas désinstaller l’ancienne application pour les tester. Le workflow exécute les tests unitaires debug/release, lint et les deux compilations.
+
+À vérifier sur Infinix / XOS : toucher et déplacer la petite barre ; absence de l’option Retour ; réduction/restauration des bulles ; ouverture depuis les tuiles ; fonctionnement habituel de la touche Carré et absence de carte de groupe créée par FloatX. La signature stable reste soumise au secret et à la vérification décrits dans `signing/README.md`.
+
+# FloatX 1.0.0
+
+L’accueil présente l’état de connexion, l’ouverture d’une appli, l’organisation de quatre applis et les favoris avec leurs logos. La barre flottante et le centre de contrôle restent directement accessibles. Les réglages regroupent la connexion Shizuku, la démo, le mode système de secours, le diagnostic et la fermeture de toutes les fenêtres.
+
+La version stable utilise une clé permanente privée. Le certificat public est conservé dans `signing/` ; la procédure GitHub Actions est décrite dans `signing/README.md`. Les aperçus sont séparés du paquet stable et ne servent pas à la distribution des mises à jour.
+
+Fonctions validées sur Infinix par l’utilisateur avant cette préparation : plusieurs applis, quatre coins redimensionnables, priorité au toucher, bulles, clavier externe, retour à l’accueil de l’appli, tuiles du centre de contrôle et dispositions. Le moteur reste local et dépend de Shizuku actif. La nouvelle présentation et l’installation de la version signée nécessitent une vérification sur téléphone.
+
+# FloatX 0.5.1 — logos lisibles dans les tuiles
+
+Les raccourcis du centre de contrôle utilisent le logo monochrome de l’icône adaptative lorsqu’il existe, puis son premier plan. Pour les icônes anciennes à fond uni, ce fond est retiré du masque ; les transparences du logo sont conservées. Le nom et les icônes des tuiles sont rafraîchis au retour dans FloatX. XOS garde la maîtrise de la couleur des tuiles : la couleur d’origine du logo n’est pas garantie par l’API Android (https://developer.android.com/develop/ui/views/quicksettings-tiles).
+
+Le menu « Épingler / Verrouiller » de l’écran des applications récentes appartient au lanceur XOS. Cette version ne prétend pas y injecter de commande. Réduire une fenêtre FloatX en bulle reste disponible dans son propre menu ⋯ ; ouvrir une appli en flottant reste accessible par les raccourcis du centre de contrôle.
+
+# FloatX 0.5.0 — centre de contrôle et dispositions
+
+Dans FloatX, « Configurer le centre de contrôle » associe quatre raccourcis à des applis. Accepter l’ajout proposé par Android, ou ouvrir le centre de contrôle → Modifier et ajouter FloatX 1 à 4. Le nom et l’icône suivent l’application choisie. Chaque appui replie le panneau et ouvre/restaure l’appli en flottant. La tuile « FloatX · Choisir » permet de choisir une appli à chaque fois. Shizuku et l’autorisation d’affichage flottant doivent être prêts ; sinon FloatX ouvre la configuration. L’affichage des tuiles et leur ajout dépendent du panneau XOS.
+
+Le menu ⋯ → Placement propose moitié gauche/droite, centre et chacun des quatre quarts. « Organiser les fenêtres (1 à 4) » place jusqu’à quatre fenêtres déjà ouvertes (une au centre, deux côte à côte, trois ou quatre dans les quarts ; la fenêtre sélectionnée en premier), et réduit les autres en bulles. Le bouton principal « Ouvrir jusqu’à quatre applis en grille » sélectionne et lance directement les applications. La grille laisse une place à la barre de raccourcis et les positions se recalculent après rotation. Glisser ou redimensionner manuellement quitte le placement automatique de cette fenêtre. Le minimum manuel passe à 120 × 140 dp pour permettre les quarts sur téléphone.
+
+# FloatX 0.4.5 — Retour du menu et accueil de l’appli
+
+La capture globale de Retour introduite en 0.4.4 est retirée (BackRouter et sa fenêtre auxiliaire supprimés). Le panneau principal reprend le comportement de 0.4.3. Les diagnostics de perte de Shizuku restent disponibles.
+
+Le menu ⋯ transmet toujours Retour à l’application flottante. Si Android laisse ensuite l’écran virtuel sans tâche visible, deux observations successives (espacées de 900 ms) réaffichent l’activité de lancement de l’appli sur le même écran. Les tâches actives ne sont pas réinitialisées ; une lecture inconnue de la visibilité empêche toute relance. Le contrôle est suspendu lorsque la fenêtre est minimisée et retiré à sa fermeture.
+
+À vérifier sur XOS : revenir d’une conversation à la liste, puis faire Retour à la racine et vérifier que l’accueil revient au lieu de laisser un cadre transparent. Le Retour du téléphone conserve son fonctionnement antérieur.
+
+# FloatX 0.4.4 — Retour et perte de Shizuku
+
+Le panneau de réglages est retiré de l’historique après ouverture d’une fenêtre ou de la barre. Une fenêtre auxiliaire transparente de 1 pixel capte Retour sur l’écran principal lorsque l’utilisateur sélectionne une application flottante ; la commande est injectée dans son écran virtuel. Cette fenêtre n’est pas un éditeur et ne recouvre pas le clavier. La capture est retirée quand la fenêtre sélectionnée est réduite, fermée, ou quand Shizuku s’arrête. Le menu ⋯ conserve sa commande Retour.
+
+Le rendu et les commandes utilisent des Binder locaux. FloatX ne demande pas la permission INTERNET. Une coupure Wi-Fi peut toutefois s’accompagner d’un arrêt de Shizuku démarré via le débogage sans fil, selon le système. Cette version détecte la perte du Binder, affiche la cause et permet de recréer une session en touchant son raccourci après redémarrage de Shizuku. Elle ne garantit pas de maintenir Shizuku actif si XOS l’arrête. Conserver le débogage USB et les options développeur activés et autoriser Shizuku en arrière-plan, conformément à https://shizuku.rikka.app/guide/setup/.
+
+À vérifier sur téléphone : Retour par geste et par bouton dans une conversation, clavier externe, réduction de toutes les fenêtres, puis ouverture de l’appli du dessous ; coupure du Wi-Fi en contrôlant l’état Shizuku.
+
+# FloatX 0.4.3 — redimensionnement aux quatre coins
+
+Glisser depuis n’importe lequel des quatre coins ajuste la taille. Le coin opposé reste fixe, y compris lorsque la taille minimum ou une limite de l’écran est atteinte. Les zones de prise restent invisibles (24 dp), sans ajouter de barre au cadre. Le menu ⋯, les coins arrondis et le passage au premier plan sont conservés.
+
+# FloatX 0.4.2 — commandes ⋯ et premier plan
+
+La barre supérieure est supprimée. Un bouton ⋯ est superposé en haut, au centre du contenu : appuyer ouvre les commandes (réduire, agrandir/restaurer, retour, fermer), le faire glisser déplace la fenêtre. Les coins restent arrondis à 12 dp.
+
+Toucher une fenêtre la place devant les autres une fois le geste terminé, en conservant son écran virtuel et sa SurfaceTexture. Une bulle ou un raccourci restaure aussi la fenêtre au premier plan. Le changement d’ordre est effectué entre fenêtres WindowManager, sans relancer l’application. À valider sur XOS : alternance de deux fenêtres, continuité d’un défilement et clavier externe après changement de priorité.
+
+# FloatX 0.4.1 — cadre discret
+
+La barre inférieure FLOATX est supprimée. Le contenu occupe tout le bas du cadre, avec des coins de 12 dp. La barre supérieure passe de 48 à 36 dp et le bouton retour rejoint les commandes du haut. Le redimensionnement reste disponible en glissant le coin inférieur droit, sans triangle ni bande inférieure. Les fenêtres multiples, raccourcis et réglages du clavier de 0.4.0 sont conservés.
+
+# FloatX 0.4.0
+
+Cette version ajoute plusieurs fenêtres indépendantes et une barre flottante de raccourcis.
+
+- Utiliser « Choisir les icônes de ma barre » pour épingler les applis ; cocher puis enregistrer.
+- Une pression sur une icône ouvre l’appli dans FloatX ou restaure sa fenêtre existante.
+- Appui long sur une icône : retirer le raccourci. Le bouton + ouvre la sélection.
+- Chaque fenêtre dispose de sa fermeture, de son redimensionnement et de sa bulle.
+- La densité du contenu est adaptée aux petites dimensions pour conserver tout le contenu dans la surface. Le cadre garde un minimum de 180 × 200 dp pour ses commandes.
+- L’écran virtuel demande le mode plein écran interne, sans décorations système, afin d’enlever la seconde barre de titre et la barre de navigation internes.
+- Le clavier Android est demandé sur l’écran principal via IME_POLICY_FALLBACK_DISPLAY, au lieu d’être contenu dans la fenêtre. Aucun champ de saisie de test n’est ajouté.
+
+Les réglages concernent les écrans virtuels de FloatX, sans changement global de XOS. Chaque refus système apparaît dans le diagnostic. Les profils utilisés sont 1290 (privé, TRUSTED sans décorations), puis 266 si la permission est refusée. L’effet des commandes de fenêtre et du clavier dépend du système XOS et doit être vérifié sur le téléphone. La compatibilité universelle n’est pas garantie.
+
+Les tests de géométrie, de densité et de signature Binder, lint et la compilation APK sont exécutés par GitHub Actions. Le mode système de secours et la démo restent disponibles.
+
+## Historique technique 0.3.1
+
 # FloatX 0.3.1 — cadre arrondi avec Shizuku direct
 
 Cette version remet les vraies applications dans le cadre FloatX : coins arrondis, poignée de déplacement, coin de redimensionnement, agrandissement et réduction en bulle. Le moteur 0.1 qui attendait un `UserService` Shizuku est remplacé par des **appels Binder directs** via `ShizukuBinderWrapper`.

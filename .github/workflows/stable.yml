@@ -1,0 +1,62 @@
+name: FloatX stable signé
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stable-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  stable:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Charger la signature permanente
+        env:
+          FLOATX_SIGNING_BUNDLE: ${{ secrets.FLOATX_SIGNING_BUNDLE }}
+        run: python3 scripts/prepare_signing.py
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Installer le SDK
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Compiler et valider la version stable
+        run: gradle --no-daemon testReleaseUnitTest lintRelease assembleRelease
+      - name: Vérifier le certificat permanent
+        run: python3 scripts/verify_release.py "$ANDROID_HOME/build-tools/35.0.0/apksigner" app/build/outputs/apk/release/app-release.apk signing/floatx-release-sha256.txt
+      - name: Préparer la distribution signée
+        run: |
+          mkdir -p dist
+          cp app/build/outputs/apk/release/app-release.apk dist/FloatX-stable.apk
+          cp signing/floatx-release-sha256.txt dist/CERTIFICATE-SHA256.txt
+          cd dist
+          sha256sum FloatX-stable.apk > SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FloatX-stable-signe
+          path: dist/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Effacer la clé temporaire
+        if: always()
+        run: |
+          python3 - <<'PY_CLEAN'
+          import os, pathlib, shutil
+          shutil.rmtree(pathlib.Path(os.environ['RUNNER_TEMP']) / 'floatx-signing', ignore_errors=True)
+          PY_CLEAN
