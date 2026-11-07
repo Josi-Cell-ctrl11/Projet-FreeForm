@@ -142,7 +142,8 @@ class DirectWindowBridge(private val context: Context) {
         val start=methods(taskClass).firstOrNull { it.name=="startActivity" && it.parameterTypes.contains(Intent::class.java) }
             ?: error("Interface de lancement non prise en charge")
         val intent=Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER).setComponent(target)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or (if(initial) Intent.FLAG_ACTIVITY_MULTIPLE_TASK else 0))
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS or
+                (if(initial) Intent.FLAG_ACTIVITY_MULTIPLE_TASK else 0))
         val activityOptions=ActivityOptions.makeBasic().setLaunchDisplayId(displayId)
         call(ActivityOptions::class.java,activityOptions,"setLaunchWindowingMode",1)
         val options=activityOptions.toBundle()

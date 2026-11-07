@@ -1,3 +1,28 @@
+# FloatX 1.0.1 — barre discrète et groupe de fenêtres
+
+La poignée ⋯ est remplacée par une petite barre centrée en haut de chaque fenêtre (36 × 4 dp, zone tactile invisible plus large). Glisser déplace la fenêtre, toucher ouvre les commandes. Une bande de 18 dp réserve la place de la poignée pour ne pas recouvrir les boutons de l’application. « Retour dans l’application » est retiré du menu ; les dispositions, la réduction en bulle et les quatre coins de redimensionnement restent disponibles.
+
+Les fenêtres ouvertes sont regroupées dans une seule tâche **FloatX · Fenêtres**, distincte de l’accueil de configuration. La touche Carré / Applications récentes permet de choisir une autre application. Les fenêtres, menus, bulles et la barre FloatX sont alors masqués et ne captent plus les touchers ni le clavier. Toucher la carte du groupe restaure les fenêtres visibles dans leurs positions et tailles actuelles ; une fenêtre réduite reste réduite. La carte dispose d’un aperçu du groupe, conservé uniquement en mémoire. Aucun aperçu n’est écrit sur disque par FloatX. Les tâches créées sur les écrans virtuels sont exclues des récents afin de ne pas multiplier les cartes du groupe.
+
+L’accueil propose « Revenir à mes fenêtres » ; la notification revient également au groupe. Ouvrir une appli depuis l’accueil, une tuile ou la barre rejoint ce même espace. Balayer la carte du groupe pour la supprimer ferme les sessions et la barre. Supprimer la carte de l’accueil seul ne ferme pas les fenêtres.
+
+Les sessions et leurs surfaces restent vivantes dans le service tant qu’Android le conserve. La fermeture du service, un arrêt forcé, un redémarrage ou la suppression du groupe ne peuvent pas préserver la navigation interne des applications. Une carte périmée n’essaie pas de relancer un service vide ni les applis automatiquement. La nouvelle interface ne modifie pas les préférences, les favoris ou les associations de tuiles.
+
+Version : `1.0.1`, `versionCode 101`. Le paquet stable et le certificat permanent restent inchangés. Le workflow de PR exécute les tests debug **et release**, lint debug/release et les deux compilations. Les APK d’aperçu gardent `com.josias.floatx.preview`. La distribution stable dépend toujours du secret privé et du contrôle de certificat décrits dans `signing/README.md`.
+
+À vérifier sur Infinix / XOS :
+
+- Toucher et glisser la barre ; vérifier que les commandes de l’app juste dessous restent accessibles et que « Retour dans l’application » a disparu.
+- Ouvrir deux puis quatre applications ; passer par Carré à une autre appli : aucune fenêtre, bulle ou barre ne doit rester au-dessus.
+- Toucher la carte FloatX : vérifier tailles, positions, contenu déjà ouvert, ordre des fenêtres et clavier externe.
+- Réduire une seule fenêtre en bulle avant la bascule : elle doit rester réduite au retour.
+- Vérifier la rotation, l’ajout d’une appli par tuile et l’accès au groupe depuis la notification.
+- Supprimer la carte de configuration seule puis la carte du groupe ; seule la seconde doit fermer les sessions.
+- Arrêter Shizuku et le service : vérifier les messages et l’absence de faux retour à des sessions perdues.
+- Installer une future stable de versionCode supérieur par-dessus une stable signée avec le même certificat ; vérifier la conservation des favoris et réglages. Ne pas désinstaller l’ancienne debug pour tester l’aperçu.
+
+Le lanceur XOS choisit la présentation et le moment de capture de sa carte : l’aperçu et les transitions doivent être confirmés sur le téléphone, pas uniquement par la compilation.
+
 # FloatX 1.0.0
 
 L’accueil présente l’état de connexion, l’ouverture d’une appli, l’organisation de quatre applis et les favoris avec leurs logos. La barre flottante et le centre de contrôle restent directement accessibles. Les réglages regroupent la connexion Shizuku, la démo, le mode système de secours, le diagnostic et la fermeture de toutes les fenêtres.
