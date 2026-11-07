@@ -56,10 +56,9 @@ class MainActivity : Activity() {
         page.addView(favoriteHeading)
         favorites=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL }
         page.addView(HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled=false;addView(favorites) })
-        page.addView(secondary("Revenir à mes fenêtres") { FloatingWorkspaceActivity.open(this) })
         page.addView(secondary("Afficher la barre flottante") { showDock() })
         page.addView(secondary("Centre de contrôle") { tileSettings() })
-        page.addView(Ui.text(this,"1.0.1  ·  Sur ton téléphone",12f,Ui.MUTED).apply { setPadding(0,d(24),0,0) })
+        page.addView(Ui.text(this,"1.0.2  ·  Sur ton téléphone",12f,Ui.MUTED).apply { setPadding(0,d(24),0,0) })
         page.setOnApplyWindowInsetsListener { v,insets ->
             val bars=insets.getInsets(android.view.WindowInsets.Type.systemBars())
             v.setPadding(d(22),d(24)+bars.top,d(22),d(28)+bars.bottom);insets
@@ -146,7 +145,7 @@ class MainActivity : Activity() {
                     "${Build.MANUFACTURER} ${Build.MODEL} · Android ${Build.VERSION.RELEASE}\n\n${NativeFreeformLauncher.last(this)}",13f,Ui.MUTED)
                     .apply { setPadding(d(20),d(16),d(20),d(16));setTextIsSelectable(true) }).setPositiveButton("Fermer",null).show()
                 6 -> { stopService(Intent(this,FloatingService::class.java));NativeFreeformLauncher.stopWorkspace(this);message("Les fenêtres FloatX et la barre sont fermées.") }
-                7 -> message("FloatX 1.0.1\nTes applications dans des fenêtres flottantes.\n\nLe rendu est local. Shizuku doit rester actif. En cas d’arrêt à la coupure du Wi-Fi, conserve le débogage USB activé et autorise Shizuku en arrière-plan.")
+                7 -> message("FloatX 1.0.2\nTes applications dans des fenêtres flottantes.\n\nLe rendu est local. Shizuku doit rester actif. En cas d’arrêt à la coupure du Wi-Fi, conserve le débogage USB activé et autorise Shizuku en arrière-plan.")
             }
         }.setNegativeButton("Fermer",null).show()
     }
@@ -238,7 +237,7 @@ class MainActivity : Activity() {
                     val labels=selected.map { apps[it].loadLabel(packageManager).toString() }
                     startForegroundService(Intent(this,FloatingService::class.java).setAction("OPEN_GRID")
                         .putStringArrayListExtra("components",ArrayList(targets)).putStringArrayListExtra("labels",ArrayList(labels)))
-                    FloatingWorkspaceActivity.open(this)
+                    moveTaskToBack(true)
                 }
             }.setNegativeButton("Annuler",null).show()
     }
@@ -270,7 +269,7 @@ class MainActivity : Activity() {
         if(Build.VERSION.SDK_INT>=33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS),101)
         startForegroundService(Intent(this,FloatingService::class.java).putExtra("component",target.flattenToString()).putExtra("label",label))
-        FloatingWorkspaceActivity.open(this)
+        moveTaskToBack(true)
     }
     private fun launchNative(target: ComponentName,label: String) {
         // A leftover demo overlay should never obscure the native launch test.
@@ -286,7 +285,7 @@ class MainActivity : Activity() {
         if(!Settings.canDrawOverlays(this)) { message("Autorise d’abord l’affichage flottant de la démo.");return }
         if(Build.VERSION.SDK_INT>=33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS),101)
-        startForegroundService(Intent(this,FloatingService::class.java));FloatingWorkspaceActivity.open(this)
+        startForegroundService(Intent(this,FloatingService::class.java));moveTaskToBack(true)
     }
     private fun message(value:String) { AlertDialog.Builder(this).setMessage(value).setPositiveButton("Compris",null).show() }
     private fun d(value:Int)=Ui.dp(this,value)

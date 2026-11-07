@@ -5,7 +5,6 @@ import android.app.*
 import android.content.*
 import android.content.pm.ServiceInfo
 import android.graphics.Color
-import android.graphics.Bitmap
 import android.graphics.Matrix
 import android.graphics.SurfaceTexture
 import android.os.*
@@ -22,46 +21,6 @@ class FloatingService : Service() {
     private lateinit var wm: WindowManager
     private val sessions=linkedMapOf<String,WindowSession>()
     private var frontKey:String?=null
-    private var workspaceOwner:Any?=null
-    private val workspaceListeners=linkedMapOf<Any,()->Unit>()
-    private val localBinder=LocalBinder()
-    private var stopping=false
-
-    inner class LocalBinder:Binder() { val service:FloatingService get()=this@FloatingService }
-
-    /** Overlay visibility belongs to the resumed workspace, never to a remote app task. */
-    fun observeWorkspace(owner:Any, listener:()->Unit) { workspaceListeners[owner]=listener }
-    fun forgetWorkspace(owner:Any) { setWorkspaceActive(owner,false);workspaceListeners.remove(owner) }
-    fun setWorkspaceActive(owner:Any,active:Boolean) {
-        if(active) workspaceOwner=owner else if(workspaceOwner===owner) workspaceOwner=null else return
-        refreshWorkspaceVisibility()
-    }
-    private fun workspaceVisible()=workspaceOwner!=null
-    private fun refreshWorkspaceVisibility() {
-        sessions.values.forEach { it.workspaceVisibilityChanged() }
-        dock?.visibility=if(sessions.isEmpty() || workspaceVisible()) View.VISIBLE else View.GONE
-    }
-    private fun workspaceChanged() {
-        refreshWorkspaceVisibility()
-        workspaceListeners.values.toList().forEach { it() }
-    }
-    fun workspaceEntries():List<WorkspaceEntry> = sessions.values.map { it.entry() }
-    fun isWorkspaceClosed()=stopping
-    fun restoreWindow(key:String) { sessions[key]?.restore() }
-    fun workspacePreview():Bitmap? {
-        if(sessions.isEmpty()) return null
-        val bounds=wm.maximumWindowMetrics.bounds
-        // Keep only an in-memory, bounded preview; no screenshots are written to disk.
-        val scale=480f/bounds.width().coerceAtLeast(1)
-        val image=Bitmap.createBitmap(480,(bounds.height()*scale).toInt().coerceAtLeast(1),Bitmap.Config.ARGB_8888)
-        val canvas=android.graphics.Canvas(image)
-        canvas.scale(scale,scale)
-        sessions.values.forEach { it.drawPreview(canvas) }
-        return image
-    }
-    private fun openWorkspace() {
-        if(sessions.isNotEmpty() && !workspaceVisible()) FloatingWorkspaceActivity.open(this)
-    }
     private val binderDead=rikka.shizuku.Shizuku.OnBinderDeadListener {
         main.post {
             sessions.values.forEach { it.connectionLost() }
@@ -78,26 +37,26 @@ class FloatingService : Service() {
         rikka.shizuku.Shizuku.addBinderDeadListener(binderDead)
         val channel = NotificationChannel("windows","Fenêtre flottante",NotificationManager.IMPORTANCE_LOW)
         getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
-        val open = PendingIntent.getActivity(this,0,Intent(this,FloatingWorkspaceActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),PendingIntent.FLAG_IMMUTABLE)
+        val open = PendingIntent.getActivity(this,0,Intent(this,MainActivity::class.java),PendingIntent.FLAG_IMMUTABLE)
         val stop = PendingIntent.getService(this,1,Intent(this,FloatingService::class.java).setAction("STOP"),PendingIntent.FLAG_IMMUTABLE)
         val notification = Notification.Builder(this,"windows").setSmallIcon(com.josias.floatx.R.drawable.ic_floatx)
-            .setContentTitle("FloatX · fenêtre active").setContentText("Appuie pour retrouver tes fenêtres.")
+            .setContentTitle("FloatX · fenêtre active").setContentText("Appuie pour revenir aux commandes.")
             .setContentIntent(open).setOngoing(true).addAction(Notification.Action.Builder(null,"Tout fermer",stop).build()).build()
         if (Build.VERSION.SDK_INT >= 34) startForeground(1,notification,ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         else startForeground(1,notification)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == "STOP" || !Settings.canDrawOverlays(this)) { closeWorkspace(); return START_NOT_STICKY }
+        if (intent?.action == "STOP" || !Settings.canDrawOverlays(this)) { stopSelf(); return START_NOT_STICKY }
         if(intent?.action=="OPEN_GRID") {
             val components=intent.getStringArrayListExtra("components").orEmpty().distinct().take(4)
             val labels=intent.getStringArrayListExtra("labels").orEmpty()
             components.forEachIndexed { index,value -> openSession(value,labels.getOrNull(index) ?: "Application") }
-            showDock();arrangeGrid(components);workspaceChanged();openWorkspace();return START_NOT_STICKY
+            showDock();arrangeGrid(components);return START_NOT_STICKY
         }
-        if(intent?.action=="DOCK") { showDock();openWorkspace();return START_NOT_STICKY }
+        if(intent?.action=="DOCK") { showDock();return START_NOT_STICKY }
         openSession(intent?.getStringExtra("component"),intent?.getStringExtra("label") ?: "Démo interactive")
-        showDock();workspaceChanged();openWorkspace()
+        showDock()
         return START_NOT_STICKY
     }
 
@@ -114,7 +73,6 @@ class FloatingService : Service() {
         val session=WindowSession(key,component,label)
         sessions[key]=session
         session.start()
-        workspaceChanged()
     }
     private fun arrangeGrid(order:List<String>) {
         val chosen=order.mapNotNull { sessions[it] }.filter { it.canArrange() }.take(4)
@@ -130,16 +88,7 @@ class FloatingService : Service() {
     private fun closeSession(key:String,keepService:Boolean=false) {
         sessions.remove(key)?.dispose()
         if(frontKey==key) frontKey=null
-        if(!keepService && sessions.isEmpty()) closeWorkspace()
-        else if(!keepService) workspaceChanged()
-    }
-    private fun closeWorkspace() {
-        if(stopping) return
-        stopping=true
-        sessions.values.toList().forEach { it.dispose() };sessions.clear();frontKey=null
-        dock?.let { if(it.isAttachedToWindow) wm.removeView(it) };dock=null
-        workspaceChanged()
-        stopSelf()
+        if(!keepService && sessions.isEmpty() && dock==null) stopSelf()
     }
     private fun d(value:Int)=Ui.dp(this,value)
     private fun toast(value:String) { Toast.makeText(this,value,Toast.LENGTH_LONG).show() }
@@ -163,7 +112,7 @@ class FloatingService : Service() {
                 row.addView(ImageView(this).apply {
                     setImageDrawable(info.loadIcon(packageManager));setPadding(d(8),d(8),d(8),d(8))
                     contentDescription="Ouvrir $label en flottant ; appui long pour retirer"
-                    setOnClickListener { openSession(value,label);openWorkspace() }
+                    setOnClickListener { openSession(value,label) }
                     setOnLongClickListener {
                         val next=pins.getStringSet("apps",emptySet()).orEmpty().toMutableSet();next.remove(value)
                         pins.edit().putStringSet("apps",next).apply();showDock();true
@@ -180,7 +129,6 @@ class FloatingService : Service() {
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM,
             android.graphics.PixelFormat.TRANSLUCENT).apply { gravity=Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL;y=d(8) }
         wm.addView(scroll,dockParams)
-        refreshWorkspaceVisibility()
     }
     override fun onConfigurationChanged(newConfig:android.content.res.Configuration) {
         super.onConfigurationChanged(newConfig)
@@ -188,19 +136,12 @@ class FloatingService : Service() {
         if(dock!=null) showDock()
     }
     override fun onDestroy() {
-        stopping=true
         rikka.shizuku.Shizuku.removeBinderDeadListener(binderDead)
         sessions.values.toList().forEach { it.dispose() };sessions.clear()
         dock?.let { wm.removeView(it) };dock=null
-        workspaceListeners.values.toList().forEach { it() };workspaceListeners.clear();workspaceOwner=null
         io.shutdown();stopForeground(STOP_FOREGROUND_REMOVE);super.onDestroy()
     }
-    override fun onBind(intent:Intent?):IBinder=localBinder
-    override fun onTaskRemoved(rootIntent:Intent?) {
-        // Swiping the group's card closes its windows, not the unrelated home task.
-        if(rootIntent?.component?.className==FloatingWorkspaceActivity::class.java.name) closeWorkspace()
-        super.onTaskRemoved(rootIntent)
-    }
+    override fun onBind(intent:Intent?):IBinder?=null
 
     private inner class WindowSession(private val key:String,private val component:String?,private val label:String) {
     private var root: FrameLayout? = null
@@ -219,7 +160,6 @@ class FloatingService : Service() {
     private var renderW = 1
     private var renderH = 1
     private var minimized = false
-    private var focused = false
     private var savedBox: WindowBox? = null
     private var full = false
     private var placement:WindowPlacement?=null
@@ -240,7 +180,7 @@ class FloatingService : Service() {
     private val resizeUpdate=Runnable { resizeDisplay() }
     private val rootCheck=object:Runnable {
         override fun run() {
-            if(!ready || failed || minimized || !workspaceVisible() || root==null) return
+            if(!ready || failed || minimized || root==null) return
             val target=host ?: return
             val token=generation
             io.execute {
@@ -248,7 +188,7 @@ class FloatingService : Service() {
                 catch(e:Exception) {
                     NativeFreeformLauncher.record(this@FloatingService,"Vérification de l’accueil : ${e.message}")
                 }
-                main.post { if(token==generation && ready && !failed && !minimized && workspaceVisible()) main.postDelayed(this,900) }
+                main.post { if(token==generation && ready && !failed && !minimized) main.postDelayed(this,900) }
             }
         }
     }
@@ -333,7 +273,6 @@ class FloatingService : Service() {
                 (if(corner.left) Gravity.START else Gravity.END)
             panel.addView(resize,FrameLayout.LayoutParams(d(24),d(24),gravity))
         }
-        applyWorkspaceVisibility()
         wm.addView(panel,params)
         frontKey=key
         updateWindow()
@@ -535,47 +474,8 @@ class FloatingService : Service() {
         val target=host ?: return
         io.execute { try { action(target) } catch(e:Exception) { main.post { toast("Commande refusée : ${e.message}") } } }
     }
-    fun entry()=WorkspaceEntry(key,label,component,WindowBox(params.x,params.y,params.width,params.height),minimized)
-    fun drawPreview(canvas:android.graphics.Canvas) {
-        if(minimized) return
-        val panel=root ?: return
-        val save=canvas.save()
-        canvas.translate(params.x.toFloat(),params.y.toFloat())
-        panel.draw(canvas)
-        // TextureView's producer is not part of a normal View.draw() software pass.
-        texture?.takeIf { it.isAvailable }?.let { view ->
-            val bitmap=view.getBitmap(view.width.coerceAtMost(480).coerceAtLeast(1),
-                (view.height.toFloat()*480/view.width.coerceAtLeast(1)).toInt().coerceIn(1,960))
-            bitmap?.let {
-                canvas.drawBitmap(it,null,android.graphics.Rect(0,d(18),params.width,params.height),null)
-                it.recycle()
-            }
-        }
-        canvas.restoreToCount(save)
-    }
-    private fun applyWorkspaceVisibility() {
-        val state=WorkspaceVisibility.forWindow(workspaceVisible(),minimized,focused)
-        params.alpha=if(state.visible) 1f else 0f
-        val mask=WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM
-        params.flags=params.flags and mask.inv()
-        if(!state.touchable) params.flags=params.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
-        if(!state.focusable) params.flags=params.flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM
-    }
-    fun workspaceVisibilityChanged() {
-        dismissMenu()
-        if(!workspaceVisible()) {
-            focused=false
-            getSystemService(InputMethodManager::class.java).hideSoftInputFromWindow(root?.windowToken,0)
-        }
-        applyWorkspaceVisibility()
-        root?.let { if(it.isAttachedToWindow) wm.updateViewLayout(it,params) }
-        bubble?.visibility=if(workspaceVisible()) View.VISIBLE else View.GONE
-        main.removeCallbacks(rootCheck)
-        if(workspaceVisible() && ready && !minimized) main.postDelayed(rootCheck,900)
-    }
     private fun focusWindow() {
-        focused=true
-        applyWorkspaceVisibility()
+        params.flags=params.flags and (WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM).inv()
         root?.let { wm.updateViewLayout(it,params) }
     }
     private fun updateWindow() {
@@ -599,8 +499,8 @@ class FloatingService : Service() {
         if(frontKey==key) frontKey=null
         getSystemService(InputMethodManager::class.java).hideSoftInputFromWindow(root?.windowToken,0)
         // Keep the texture attached while minimized; removing it would destroy the display surface.
-        focused=false
-        applyWorkspaceVisibility()
+        params.alpha=0f
+        params.flags=params.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
         root?.let { wm.updateViewLayout(it,params) }
         val b=FrameLayout(this@FloatingService).apply {
             background=Ui.rounded(this@FloatingService,Ui.GREEN,28)
@@ -623,17 +523,14 @@ class FloatingService : Service() {
             bubbleParams.y=(bubbleParams.y+dy).coerceIn(0,(screenH-d(56)).coerceAtLeast(0))
             bubble?.let { wm.updateViewLayout(it,bubbleParams) }
         })
-        b.visibility=if(workspaceVisible()) View.VISIBLE else View.GONE
         wm.addView(b,bubbleParams)
-        workspaceChanged()
     }
     fun restore() {
         bubble?.let { wm.removeView(it) };bubble=null;minimized=false
-        applyWorkspaceVisibility()
+        params.alpha=1f;params.flags=params.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
         root?.let { wm.updateViewLayout(it,params) }
         raise()
-        main.removeCallbacks(rootCheck);if(ready && workspaceVisible()) main.postDelayed(rootCheck,900)
-        workspaceChanged()
+        main.removeCallbacks(rootCheck);if(ready) main.postDelayed(rootCheck,900)
     }
     @SuppressLint("ClickableViewAccessibility")
     private fun gesture(onEnd:()->Unit={},onClick:()->Unit={},move:(Int,Int)->Unit):View.OnTouchListener {

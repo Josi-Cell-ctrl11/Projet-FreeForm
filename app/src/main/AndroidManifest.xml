@@ -15,10 +15,6 @@
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
         </activity>
-        <activity android:name=".FloatingWorkspaceActivity" android:exported="false"
-            android:label="FloatX · Fenêtres" android:launchMode="singleTask"
-            android:taskAffinity="${applicationId}.floating" android:excludeFromRecents="false"
-            android:theme="@style/AppTheme" />
         <activity android:name=".FreeformWorkspaceActivity" android:exported="false"
             android:resizeableActivity="true" android:excludeFromRecents="true"
             android:launchMode="singleInstance" android:taskAffinity="com.josias.floatx.workspace"

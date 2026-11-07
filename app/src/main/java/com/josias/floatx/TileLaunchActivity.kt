@@ -21,7 +21,6 @@ class TileLaunchActivity:Activity() {
         if(exists && ready) {
             startForegroundService(Intent(this,FloatingService::class.java)
                 .putExtra("component",target!!.flattenToString()).putExtra("label",AppTiles.label(this,slot)))
-            FloatingWorkspaceActivity.open(this)
         } else {
             val page=Intent(this,MainActivity::class.java)
             if(!exists) page.putExtra("configure_tile",slot)

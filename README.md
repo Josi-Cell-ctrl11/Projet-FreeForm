@@ -1,27 +1,12 @@
-# FloatX 1.0.1 — barre discrète et groupe de fenêtres
+# FloatX 1.0.2 — barre discrète, fenêtres flottantes classiques
 
-La poignée ⋯ est remplacée par une petite barre centrée en haut de chaque fenêtre (36 × 4 dp, zone tactile invisible plus large). Glisser déplace la fenêtre, toucher ouvre les commandes. Une bande de 18 dp réserve la place de la poignée pour ne pas recouvrir les boutons de l’application. « Retour dans l’application » est retiré du menu ; les dispositions, la réduction en bulle et les quatre coins de redimensionnement restent disponibles.
+La poignée ⋯ est remplacée par une petite barre centrée en haut de chaque fenêtre (36 × 4 dp, zone tactile invisible plus large). Glisser déplace la fenêtre ; toucher ouvre les commandes. Une bande de 18 dp réserve la place de la poignée. L’option « Retour dans l’application » est retirée du menu. Les dispositions, bulles et quatre coins de redimensionnement sont conservés.
 
-Les fenêtres ouvertes sont regroupées dans une seule tâche **FloatX · Fenêtres**, distincte de l’accueil de configuration. La touche Carré / Applications récentes permet de choisir une autre application. Les fenêtres, menus, bulles et la barre FloatX sont alors masqués et ne captent plus les touchers ni le clavier. Toucher la carte du groupe restaure les fenêtres visibles dans leurs positions et tailles actuelles ; une fenêtre réduite reste réduite. La carte dispose d’un aperçu du groupe, conservé uniquement en mémoire. Aucun aperçu n’est écrit sur disque par FloatX. Les tâches créées sur les écrans virtuels sont exclues des récents afin de ne pas multiplier les cartes du groupe.
+Le regroupement dans une carte « FloatX · Fenêtres » est supprimé à la demande de l’utilisateur. La touche Carré / Applications récentes retrouve son fonctionnement habituel : les fenêtres flottantes ne sont plus masquées ou restaurées par une activité de groupe. Ouvrir une appli depuis l’accueil, la barre ou une tuile utilise directement le service flottant, comme avant. La notification revient aux commandes de FloatX.
 
-L’accueil propose « Revenir à mes fenêtres » ; la notification revient également au groupe. Ouvrir une appli depuis l’accueil, une tuile ou la barre rejoint ce même espace. Balayer la carte du groupe pour la supprimer ferme les sessions et la barre. Supprimer la carte de l’accueil seul ne ferme pas les fenêtres.
+Version `1.0.2`, `versionCode 102`. Le paquet stable, le certificat permanent et les préférences existantes sont conservés. Les aperçus gardent leur paquet distinct ; ne pas désinstaller l’ancienne application pour les tester. Le workflow exécute les tests unitaires debug/release, lint et les deux compilations.
 
-Les sessions et leurs surfaces restent vivantes dans le service tant qu’Android le conserve. La fermeture du service, un arrêt forcé, un redémarrage ou la suppression du groupe ne peuvent pas préserver la navigation interne des applications. Une carte périmée n’essaie pas de relancer un service vide ni les applis automatiquement. La nouvelle interface ne modifie pas les préférences, les favoris ou les associations de tuiles.
-
-Version : `1.0.1`, `versionCode 101`. Le paquet stable et le certificat permanent restent inchangés. Le workflow de PR exécute les tests debug **et release**, lint debug/release et les deux compilations. Les APK d’aperçu gardent `com.josias.floatx.preview`. La distribution stable dépend toujours du secret privé et du contrôle de certificat décrits dans `signing/README.md`.
-
-À vérifier sur Infinix / XOS :
-
-- Toucher et glisser la barre ; vérifier que les commandes de l’app juste dessous restent accessibles et que « Retour dans l’application » a disparu.
-- Ouvrir deux puis quatre applications ; passer par Carré à une autre appli : aucune fenêtre, bulle ou barre ne doit rester au-dessus.
-- Toucher la carte FloatX : vérifier tailles, positions, contenu déjà ouvert, ordre des fenêtres et clavier externe.
-- Réduire une seule fenêtre en bulle avant la bascule : elle doit rester réduite au retour.
-- Vérifier la rotation, l’ajout d’une appli par tuile et l’accès au groupe depuis la notification.
-- Supprimer la carte de configuration seule puis la carte du groupe ; seule la seconde doit fermer les sessions.
-- Arrêter Shizuku et le service : vérifier les messages et l’absence de faux retour à des sessions perdues.
-- Installer une future stable de versionCode supérieur par-dessus une stable signée avec le même certificat ; vérifier la conservation des favoris et réglages. Ne pas désinstaller l’ancienne debug pour tester l’aperçu.
-
-Le lanceur XOS choisit la présentation et le moment de capture de sa carte : l’aperçu et les transitions doivent être confirmés sur le téléphone, pas uniquement par la compilation.
+À vérifier sur Infinix / XOS : toucher et déplacer la petite barre ; absence de l’option Retour ; réduction/restauration des bulles ; ouverture depuis les tuiles ; fonctionnement habituel de la touche Carré et absence de carte de groupe créée par FloatX. La signature stable reste soumise au secret et à la vérification décrits dans `signing/README.md`.
 
 # FloatX 1.0.0
 
