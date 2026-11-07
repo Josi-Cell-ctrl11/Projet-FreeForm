@@ -95,7 +95,7 @@ class FloatingService : Service() {
             components.forEachIndexed { index,value -> openSession(value,labels.getOrNull(index) ?: "Application") }
             showDock();arrangeGrid(components);workspaceChanged();openWorkspace();return START_NOT_STICKY
         }
-        if(intent?.action=="DOCK") { showDock();return START_NOT_STICKY }
+        if(intent?.action=="DOCK") { showDock();openWorkspace();return START_NOT_STICKY }
         openSession(intent?.getStringExtra("component"),intent?.getStringExtra("label") ?: "Démo interactive")
         showDock();workspaceChanged();openWorkspace()
         return START_NOT_STICKY
