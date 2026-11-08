@@ -4,20 +4,18 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class DisplayProfilesTest {
-    @Test fun requestedModeHasTrustedAndDecorations() {
-        assertEquals(1803,DisplayProfiles.creationOrder.first())
+    @Test fun preferredProfileIsTrustedWithoutDesktopDecorations() {
+        assertEquals(1290,DisplayProfiles.creationOrder.first())
         assertTrue(DisplayProfiles.trusted(DisplayProfiles.creationOrder.first()))
-        assertTrue(DisplayProfiles.decorated(DisplayProfiles.creationOrder.first()))
     }
-    @Test fun decorationRefusalCanKeepTrustedMode() {
-        val fallback=DisplayProfiles.creationOrder[1]
-        assertTrue(DisplayProfiles.trusted(fallback));assertFalse(DisplayProfiles.decorated(fallback))
-    }
-    @Test fun permissionFallbackNeverRequestsDecorationsOnUntrustedDisplay() {
+    @Test fun allProfilesExcludeInnerSystemBars() {
         for(flags in DisplayProfiles.creationOrder) {
-            assertTrue(!DisplayProfiles.decorated(flags)||DisplayProfiles.trusted(flags))
+            assertFalse(DisplayProfiles.decorated(flags))
+            assertEquals(0,flags and 1) // Never PUBLIC: avoids forced external desktop mode.
             assertEquals(DisplayProfiles.BASE,flags and DisplayProfiles.BASE)
         }
+    }
+    @Test fun permissionRefusalRetainsStandardFallback() {
         assertEquals(DisplayProfiles.BASE,DisplayProfiles.creationOrder.last())
         assertFalse(DisplayProfiles.trusted(DisplayProfiles.creationOrder.last()))
     }

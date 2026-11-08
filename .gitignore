@@ -4,3 +4,7 @@ local.properties
 **/build/
 *.jks
 *.keystore
+*.p12
+*SIGNING_BUNDLE*
+floatx-private/
+__pycache__/

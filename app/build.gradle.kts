@@ -7,15 +7,37 @@ android {
         applicationId = "com.josias.floatx"
         minSdk = 30
         targetSdk = 35
-        versionCode = 6
-        versionName = "0.3.1-trusted"
+        manifestPlaceholders["appLabel"] = "FloatX"
+        versionCode = 103
+        versionName = "1.0.3"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
-    buildTypes { release { isMinifyEnabled = false } }
+    signingConfigs {
+        if (!System.getenv("FLOATX_KEYSTORE_PATH").isNullOrBlank()) {
+            create("stable") {
+                storeFile = file(System.getenv("FLOATX_KEYSTORE_PATH"))
+                storePassword = System.getenv("FLOATX_STORE_PASSWORD")
+                keyAlias = System.getenv("FLOATX_KEY_ALIAS")
+                keyPassword = System.getenv("FLOATX_KEY_PASSWORD")
+            }
+        }
+    }
+    buildTypes {
+        debug {
+            applicationIdSuffix = ".preview"
+            versionNameSuffix = "-preview"
+            manifestPlaceholders["appLabel"] = "FloatX Aperçu"
+        }
+        release {
+            isMinifyEnabled = false
+            isDebuggable = false
+            signingConfig = signingConfigs.findByName("stable")
+        }
+    }
     lint { abortOnError = true }
 }
 
