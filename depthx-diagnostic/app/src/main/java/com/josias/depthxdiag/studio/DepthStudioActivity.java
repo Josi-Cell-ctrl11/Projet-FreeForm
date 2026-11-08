@@ -36,7 +36,7 @@ public class DepthStudioActivity extends Activity {
         LinearLayout page=new LinearLayout(this);page.setOrientation(LinearLayout.VERTICAL);page.setPadding(dp(16),dp(18),dp(16),dp(24));scroll.addView(page);
         page.addView(label("DepthX",32,true));page.addView(label("Ton image. Ton horloge. Ton effet de profondeur.",14,false));
         status=label("Chargement…",14,false);page.addView(status);
-        row(page,button("Choisir ma photo",this::choosePhoto),button("Plein écran",()->saveThen(()->startActivity(new Intent(this,DepthPreviewActivity.class)))));
+        row(page,button("Choisir ma photo",this::choosePhoto),button("Plein écran",this::preview));
         editor=new DepthEditorView(this);editor.setScene(DepthScene.demo());editor.changed=()->{dirty=true;syncSliders();};page.addView(editor,new LinearLayout.LayoutParams(-1,-2));
         tool=label("Horloge : glisse pour la placer ; pince pour la redimensionner.",14,false);page.addView(tool);
         row(page,button("Horloge",()->mode(DepthEditorView.CLOCK)),button("Photo",()->mode(DepthEditorView.PHOTO)));
@@ -132,12 +132,15 @@ public class DepthStudioActivity extends Activity {
         if(busy||editor.scene==null)return;
         final DepthScene scene=editor.scene;
         setBusy(true,"Détourage automatique sur ton téléphone…");
-        Segmenter segmenter=Segmentation.getClient(new SelfieSegmenterOptions.Builder().setDetectorMode(SelfieSegmenterOptions.SINGLE_IMAGE_MODE).enableRawSizeMask().build());
+        final Segmenter segmenter;
+        try{segmenter=Segmentation.getClient(new SelfieSegmenterOptions.Builder().setDetectorMode(SelfieSegmenterOptions.SINGLE_IMAGE_MODE).enableRawSizeMask().build());}
+        catch(RuntimeException e){setBusy(false,"Le modèle auto n’est pas disponible. Utilise le pinceau.");return;}
         segmenter.process(InputImage.fromBitmap(scene.photo,0)).addOnSuccessListener(result->{
             if(isDestroyed()){segmenter.close();return;}
             int w=result.getWidth(),h=result.getHeight();float[] confidence=new float[w*h];
             ByteBuffer source=result.getBuffer();ByteBuffer copy=source.duplicate().order(source.order());copy.rewind();copy.asFloatBuffer().get(confidence);segmenter.close();
             io.execute(()->{
+                try {
                 int[] pixels=new int[w*h];int foreground=0;
                 for(int i=0;i<pixels.length;i++){int alpha=SceneMath.maskAlpha(confidence[i]);pixels[i]=(alpha<<24)|0xFFFFFF;if(alpha>128)foreground++;}
                 float coverage=foreground/(float)pixels.length;
@@ -149,8 +152,19 @@ public class DepthStudioActivity extends Activity {
                     editor.rememberMask();scene.mask=mask;scene.depth=true;depthToggle.setChecked(true);dirty=true;editor.invalidate();
                     setBusy(false,"Sujet détouré. Vérifie les contours et corrige au pinceau si nécessaire.");
                 }});
+                }catch(Exception|OutOfMemoryError e){main.post(()->{if(!isDestroyed())setBusy(false,"Auto n’a pas pu créer le masque. Le pinceau reste utilisable.");});}
             });
         }).addOnFailureListener(error->{segmenter.close();if(!isDestroyed())setBusy(false,"Auto indisponible pour cette image. Le pinceau reste utilisable.");});
+    }
+    private void preview() {
+        if(busy||editor.scene==null)return;
+        final DepthScene snapshot;
+        try{snapshot=editor.scene.snapshot();}catch(Exception|OutOfMemoryError e){toast("Mémoire insuffisante pour l’aperçu.");return;}
+        setBusy(true,"Préparation de l’aperçu…");
+        io.execute(()->{
+            try{SceneStore.savePreview(this,snapshot);main.post(()->{if(!isDestroyed()){setBusy(false,"Aperçu préparé. Enregistrer applique les modifications au fond actif.");startActivity(new Intent(this,DepthPreviewActivity.class));}});}
+            catch(Exception e){main.post(()->{if(!isDestroyed())setBusy(false,"Aperçu indisponible. Tes modifications restent dans l’éditeur.");});}
+        });
     }
     private void saveThen(Runnable action) {
         if(busy||editor.scene==null)return;

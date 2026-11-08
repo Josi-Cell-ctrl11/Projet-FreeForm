@@ -21,7 +21,7 @@ public class DepthPreviewActivity extends Activity {
         preview=new View(this) { @Override protected void onDraw(android.graphics.Canvas c) { renderer.draw(c,getWidth(),getHeight(),scene,System.currentTimeMillis(),true,false); } };
         preview.setContentDescription("Aperçu plein écran du fond et de l’horloge DepthX. Retour pour quitter.");setContentView(preview);
         io.execute(()->{
-            try { DepthScene next=SceneStore.load(this);main.post(()->{ if(!isDestroyed()) {scene=next;preview.invalidate();} }); }
+            try { DepthScene next=SceneStore.loadPreview(this);main.post(()->{ if(!isDestroyed()) {scene=next;preview.invalidate();} }); }
             catch(Exception e) { main.post(()->{ if(!isDestroyed()) {Toast.makeText(this,"Composition indisponible",Toast.LENGTH_LONG).show();finish();} }); }
         });
     }

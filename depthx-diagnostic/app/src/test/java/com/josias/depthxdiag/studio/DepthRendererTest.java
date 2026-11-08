@@ -33,6 +33,20 @@ public class DepthRendererTest {
         Bitmap after=draw(s);assertTrue(white(after)>0);assertTrue(white(after)<white(before));
         for(int y=0;y<(int)(h*.3f);y++)for(int x=0;x<w;x++)assertEquals(Color.RED,after.getPixel(x,y));
     }
+    @Test public void fullscreenPreviewDoesNotReplaceTheAppliedWallpaper()throws Exception{
+        android.content.Context context=org.robolectric.RuntimeEnvironment.getApplication();
+        DepthScene active=scene();active.top=.15f;SceneStore.save(context,active);
+        String applied=SceneStore.current(context);
+        DepthScene preview=scene();preview.top=.3f;SceneStore.savePreview(context,preview);
+        assertEquals(applied,SceneStore.current(context));
+        assertEquals(.15f,SceneStore.load(context).top,.001f);assertEquals(.3f,SceneStore.loadPreview(context).top,.001f);
+    }
+    @Test public void renderRealDemoForVisualInspection()throws Exception{
+        Bitmap image=Bitmap.createBitmap(720,1576,Bitmap.Config.ARGB_8888);
+        new DepthRenderer().draw(new Canvas(image),720,1576,DepthScene.demo(),1700000000000L,true,false);
+        java.io.File file=new java.io.File("build/reports/depthx-render-preview.png");file.getParentFile().mkdirs();
+        try(java.io.FileOutputStream out=new java.io.FileOutputStream(file)){assertTrue(image.compress(Bitmap.CompressFormat.PNG,100,out));}
+    }
     @Test public void persistedSceneRetainsMaskAndClockSettings()throws Exception{
         android.content.Context context=org.robolectric.RuntimeEnvironment.getApplication();DepthScene s=scene();s.top=.24f;s.height=.31f;s.target=2;s.mask.setPixel(30,50,Color.WHITE);
         SceneStore.save(context,s);DepthScene restored=SceneStore.load(context);
