@@ -8,7 +8,7 @@ Enregistrer publie une génération complète de photo + masque + JSON puis chan
 
 Limite explicite : l’horloge est celle de DepthX dans le fond animé. L’horloge système XOS peut rester au-dessus et produire un doublon. L’application ne la masque pas et ne simule pas le déverrouillage ; aucun code PIN/biométrie n’est remplacé. L’aperçu plein écran est un aperçu dans l’application, pas un nouvel écran sécurisé de verrouillage. Les réglages XOS restent accessibles depuis un bouton séparé.
 
-Paquet com.josias.depthx, version 0.3.0, code 3, même clé permanente que 0.2.0. La release est signée hors ligne avec vérification de la référence publique. La clé privée ne doit jamais entrer dans GitHub. Voir INSPIRATIONS.md pour les projets et documentations étudiés ; aucun code d’Atmo n’est repris.
+APK ARM 32/64 bits (bibliothèques x86 de PC exclues pour limiter le téléchargement). Paquet com.josias.depthx, version 0.3.0, code 3, même clé permanente que 0.2.0. La release est signée hors ligne avec vérification de la référence publique. La clé privée ne doit jamais entrer dans GitHub. Voir INSPIRATIONS.md pour les projets et documentations étudiés ; aucun code d’Atmo n’est repris.
 
 Validation : tests de géométrie et de politique des écrans, tests Canvas natifs Robolectric vérifiant que le premier plan occulte réellement les pixels de l’horloge, et sauvegarde/restauration de masque et réglages. Tests debug/release, lint debug/release et deux compilations dans Actions. Restent à tester sur Infinix : modèle automatique, pinceaux, import réel, installation du fond, horloge système et rendu au verrouillage.
 
