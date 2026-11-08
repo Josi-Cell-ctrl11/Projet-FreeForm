@@ -1,0 +1,7 @@
+# Références étudiées pour DepthX 0.3.0
+
+- Atmo Engine / saad-khan-rind/NOSAtmosphereEffect, branche master, consulté le 8 novembre 2026 : https://github.com/saad-khan-rind/NOSAtmosphereEffect . Licence déclarée MIT. Étude de la composition sujet/horloge, de la sélection accueil/verrouillage et du guide des horloges système. Le projet explique lui-même que la suppression de l’horloge système dépend du constructeur. Aucun code, modèle ni visuel de ce projet n’est copié dans DepthX.
+- Guide officiel Google ML Kit, Selfie Segmentation : https://developers.google.com/ml-kit/vision/selfie-segmentation/android . SDK 16.0.0-beta6, SINGLE_IMAGE_MODE et masque à résolution brute. Modèle intégré à la dépendance, conçu pour les personnes ; son résultat sur les dessins ou animaux n’est pas garanti. DepthX fournit donc un pinceau de correction indépendant du modèle. Les images ne sont pas envoyées par DepthX ; les permissions réseau ajoutées par des dépendances sont retirées du manifeste fusionné.
+- API Android WallpaperService.Engine : https://developer.android.com/reference/android/service/wallpaper/WallpaperService.Engine . Surface du fond animé, visibilité et flags SYSTEM/LOCK. L’horloge DepthX est dans le fond d’écran et ne remplace pas les éléments Keyguard/XOS.
+
+Le code du studio DepthX est une implémentation originale. Les licences des dépendances restent celles de leurs éditeurs. Les modèles ML Kit ne sont pas des modèles open source dérivés du dépôt Atmo.

@@ -31,10 +31,10 @@ jobs:
       - name: Préparer l’APK
         run: |
           mkdir -p dist-depthx
-          cp depthx-diagnostic/app/build/outputs/apk/release/app-release-unsigned.apk dist-depthx/DepthX-0.2.0-unsigned.apk
+          cp depthx-diagnostic/app/build/outputs/apk/release/app-release-unsigned.apk dist-depthx/DepthX-0.3.0-unsigned.apk
           cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" dist-depthx/
           cd dist-depthx
-          sha256sum DepthX-0.2.0-unsigned.apk > SHA256SUMS.txt
+          sha256sum DepthX-0.3.0-unsigned.apk > SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
           name: DepthX-release-inputs

@@ -1,6 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
     <!-- Local sideload diagnostic: find OEM wallpaper providers whose names are not known yet. -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" tools:ignore="QueryAllPackagesPermission" />
+    <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" tools:node="remove" />
     <queries>
         <intent><action android:name="android.service.wallpaper.WallpaperService" /></intent>
         <intent><action android:name="android.intent.action.SET_WALLPAPER" /></intent>
@@ -8,7 +10,14 @@
     </queries>
     <application android:label="DepthX" android:theme="@style/AppTheme"
         android:icon="@drawable/ic_depth" android:allowBackup="false" android:supportsRtl="true">
-        <activity android:name=".MainActivity" android:exported="true">
+        <activity android:name=".MainActivity" android:exported="false" />
+        <activity android:name=".studio.DepthPreviewActivity" android:exported="false" />
+        <service android:name=".studio.DepthWallpaperService" android:label="DepthX · Horloge et profondeur"
+            android:exported="true" android:permission="android.permission.BIND_WALLPAPER">
+            <intent-filter><action android:name="android.service.wallpaper.WallpaperService" /></intent-filter>
+            <meta-data android:name="android.service.wallpaper" android:resource="@xml/depth_wallpaper" />
+        </service>
+        <activity android:name=".studio.DepthStudioActivity" android:exported="true" android:configChanges="orientation|screenSize|keyboardHidden">
             <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
         </activity>
     </application>
