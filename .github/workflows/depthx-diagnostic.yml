@@ -1,0 +1,49 @@
+name: DepthX Diagnostic APK
+on:
+  push:
+    branches: [depthx/native-discovery]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: depthx-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  diagnostic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Tester et compiler DepthX Diagnostic
+        run: gradle -p depthx-diagnostic --no-daemon testDebugUnitTest lintDebug assembleDebug
+      - name: Préparer l’APK
+        run: |
+          mkdir -p dist-depthx
+          cp depthx-diagnostic/app/build/outputs/apk/debug/app-debug.apk dist-depthx/DepthX-Diagnostic-0.1.0.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs dist-depthx/DepthX-Diagnostic-0.1.0.apk
+          cd dist-depthx
+          sha256sum DepthX-Diagnostic-0.1.0.apk > SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DepthX-Diagnostic
+          path: dist-depthx/
+          if-no-files-found: error
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: DepthX-validation
+          path: depthx-diagnostic/app/build/reports/
+          if-no-files-found: ignore
