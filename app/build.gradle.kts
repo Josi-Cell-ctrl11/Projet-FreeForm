@@ -8,8 +8,8 @@ android {
         minSdk = 30
         targetSdk = 35
         manifestPlaceholders["appLabel"] = "FloatX"
-        versionCode = 102
-        versionName = "1.0.2"
+        versionCode = 103
+        versionName = "1.0.3"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

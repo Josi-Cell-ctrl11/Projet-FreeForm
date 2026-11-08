@@ -1,3 +1,15 @@
+# FloatX 1.0.3 — barre intégrée et gestes plus fluides
+
+La petite barre est superposée directement au contenu de l’application, comme dans la maquette validée : la bande blanche et ses 18 dp de marge sont retirés. Toucher la barre ouvre les commandes, la glisser déplace la fenêtre. Le menu reste sans « Retour dans l’application » et le regroupement des récents reste retiré.
+
+Les déplacements des fenêtres et bulles sont regroupés au rythme des images de l’écran. Les mouvements fractionnaires sont accumulés au lieu d’être perdus par arrondis successifs ; la dernière position du doigt est appliquée au relâchement. Un second doigt ne remplace pas le doigt suivi. Les mises à jour en attente sont annulées à la fermeture.
+
+Pendant le redimensionnement par un coin, le cadre suit le doigt et TextureView met à l’échelle le contenu existant. La résolution et la disposition interne de l’application sont recalculées après relâchement, afin d’éviter les reconfigurations répétées de l’écran virtuel pendant le geste. Le contenu peut donc être temporairement étiré pendant le geste. Les demandes de résolution identiques sont ignorées ; une seule demande s’exécute à la fois et seule la plus récente reste en attente.
+
+Version `1.0.3`, `versionCode 103`. Les paquets, les réglages et le certificat permanent sont conservés. Les tests couvrent les déplacements fractionnaires et inversés, la dernière position, le seuil de glissement et la limitation des demandes de résolution. Les tests debug/release, lint et compilations APK sont exécutés par le workflow de PR.
+
+À tester sur Infinix/XOS : déplacements lents/rapides et inversions ; redimensionnement depuis les quatre coins et arrêt immédiat au relâchement ; absence de bande blanche ; boutons de l’app proches de la poignée ; bulles, plein écran, placements, rotation et clavier. La fluidité réelle et les éventuelles saccades propres à XOS doivent être mesurées sur le téléphone ; la compilation ne les valide pas.
+
 # FloatX 1.0.2 — barre discrète, fenêtres flottantes classiques
 
 La poignée ⋯ est remplacée par une petite barre centrée en haut de chaque fenêtre (36 × 4 dp, zone tactile invisible plus large). Glisser déplace la fenêtre ; toucher ouvre les commandes. Une bande de 18 dp réserve la place de la poignée. L’option « Retour dans l’application » est retirée du menu. Les dispositions, bulles et quatre coins de redimensionnement sont conservés.

@@ -177,10 +177,55 @@ class FloatingService : Service() {
         }
     }
 
-    private val resizeUpdate=Runnable { resizeDisplay() }
+    private var resizingByTouch=false
+    private var resizeScheduled=false
+    private val renderResizes=LatestRenderResize()
+    private val resizeUpdate=Runnable { resizeScheduled=false;resizeDisplay() }
+    private val choreographer=Choreographer.getInstance()
+    private var layoutScheduled=false
+    private var windowLayoutDirty=false
+    private var bubbleLayoutDirty=false
+    private var lastAppliedBox:WindowBox?=null
+    private val layoutFrame=Choreographer.FrameCallback {
+        layoutScheduled=false
+        applyPendingLayouts()
+    }
+    private fun requestLayoutFrame() {
+        if(layoutScheduled) return
+        layoutScheduled=true;choreographer.postFrameCallback(layoutFrame)
+    }
+    private fun applyPendingLayouts() {
+        if(windowLayoutDirty) {
+            windowLayoutDirty=false
+            val box=WindowBox(params.x,params.y,params.width,params.height)
+            root?.let { if(it.isAttachedToWindow && box!=lastAppliedBox) {
+                wm.updateViewLayout(it,params);lastAppliedBox=box
+            } }
+        }
+        if(bubbleLayoutDirty) {
+            bubbleLayoutDirty=false
+            bubble?.let { if(it.isAttachedToWindow) wm.updateViewLayout(it,bubbleParams) }
+        }
+    }
+    private fun flushLayouts() {
+        if(layoutScheduled) { choreographer.removeFrameCallback(layoutFrame);layoutScheduled=false }
+        applyPendingLayouts()
+    }
+    private fun beginResizeGesture() {
+        resizingByTouch=true
+        main.removeCallbacks(resizeUpdate);resizeScheduled=false
+        renderResizes.discardPending()
+        main.removeCallbacks(rootCheck)
+    }
+    private fun endResizeGesture() {
+        resizingByTouch=false
+        flushLayouts();scheduleResize()
+        main.removeCallbacks(rootCheck)
+        if(ready && !failed && !minimized) main.postDelayed(rootCheck,900)
+    }
     private val rootCheck=object:Runnable {
         override fun run() {
-            if(!ready || failed || minimized || root==null) return
+            if(!ready || failed || minimized || resizingByTouch || root==null) return
             val target=host ?: return
             val token=generation
             io.execute {
@@ -188,7 +233,7 @@ class FloatingService : Service() {
                 catch(e:Exception) {
                     NativeFreeformLauncher.record(this@FloatingService,"Vérification de l’accueil : ${e.message}")
                 }
-                main.post { if(token==generation && ready && !failed && !minimized) main.postDelayed(this,900) }
+                main.post { if(token==generation && ready && !failed && !minimized && !resizingByTouch) main.postDelayed(this,900) }
             }
         }
     }
@@ -235,10 +280,10 @@ class FloatingService : Service() {
             clipToOutline=true;elevation=d(10).toFloat()
         }
         root=panel
-        val column=LinearLayout(this@FloatingService).apply { orientation=LinearLayout.VERTICAL;setPadding(0,d(18),0,0) }
+        val column=LinearLayout(this@FloatingService).apply { orientation=LinearLayout.VERTICAL }
         panel.addView(column,FrameLayout.LayoutParams(-1,-1))
         if(component==null) createDemo(column) else createAppSurface(column)
-        // The 36 × 4 dp pill stays discreet; its larger invisible target remains usable.
+        // Overlay the pill directly on the app; no strip, padding or extra title bar.
         val handle=FrameLayout(this@FloatingService).apply {
             contentDescription="Commandes de $label ; glisser pour déplacer"
             isClickable=true;isFocusable=true
@@ -262,7 +307,7 @@ class FloatingService : Service() {
                     ResizeCorner.BOTTOM_RIGHT -> "Coin inférieur droit : redimensionner"
                 }
             }
-            resize.setOnTouchListener(gesture(onEnd={ resizeDisplay() }) { dx,dy ->
+            resize.setOnTouchListener(gesture(onBegin={ beginResizeGesture() },onEnd={ endResizeGesture() }) { dx,dy ->
                 dismissMenu();placement=null;full=false
                 val box=WindowGeometry.resize(WindowBox(params.x,params.y,params.width,params.height),
                     corner,dx,dy,screenW,screenH,d(120).coerceAtMost(params.width),d(140).coerceAtMost(params.height))
@@ -274,6 +319,7 @@ class FloatingService : Service() {
             panel.addView(resize,FrameLayout.LayoutParams(d(24),d(24),gravity))
         }
         wm.addView(panel,params)
+        lastAppliedBox=WindowBox(params.x,params.y,params.width,params.height)
         frontKey=key
         updateWindow()
     }
@@ -341,7 +387,7 @@ class FloatingService : Service() {
         val availableH=(screenH-if(dock!=null) d(64) else 0).coerceAtLeast(1)
         val box=WindowPlacements.box(mode,screenW,availableH,d(6))
         params.x=box.x;params.y=box.y;params.width=box.width;params.height=box.height
-        updateWindow();resizeDisplay()
+        updateWindow();scheduleResize()
     }
     private fun raise() {
         val panel=root ?: return
@@ -412,7 +458,11 @@ class FloatingService : Service() {
                 status?.text=if(host==null) "Affichage prêt · connexion au moteur Shizuku…" else "Moteur connecté · ouverture de l’appli…"
                 maybeOpen()
             }
-            override fun onSurfaceTextureSizeChanged(st:SurfaceTexture,w:Int,h:Int) { scheduleResize() }
+            override fun onSurfaceTextureSizeChanged(st:SurfaceTexture,w:Int,h:Int) {
+                // Keep the current producer resolution while the view scales under the finger.
+                if(ready && !failed) st.setDefaultBufferSize(renderW,renderH)
+                scheduleResize()
+            }
             override fun onSurfaceTextureUpdated(st:SurfaceTexture) {}
             override fun onSurfaceTextureDestroyed(st:SurfaceTexture):Boolean = !retainingTexture
         }
@@ -448,6 +498,7 @@ class FloatingService : Service() {
                 }
                 main.post { if(token==generation && !failed) {
                     main.removeCallbacks(startupTimeout)
+                    renderResizes.seed(size)
                     ready=true;status?.visibility=View.GONE
                     resizeDisplay()
                     main.removeCallbacks(rootCheck);main.postDelayed(rootCheck,900)
@@ -457,17 +508,32 @@ class FloatingService : Service() {
         }
     }
     private fun scheduleResize() {
-        main.removeCallbacks(resizeUpdate);main.postDelayed(resizeUpdate,80)
+        // TextureView scales the current app image during the gesture. Reflow only on release.
+        if(resizingByTouch || resizeScheduled || !ready || failed) return
+        resizeScheduled=true
+        main.postDelayed(resizeUpdate,32)
     }
     private fun resizeDisplay() {
-        if(!ready) return
-        texture?.post {
-            val view=texture ?: return@post
-            val size=RenderSizing.forWindow(view.width,view.height,resources.displayMetrics.densityDpi)
-            renderW=size.width;renderH=size.height
-            view.surfaceTexture?.setDefaultBufferSize(renderW,renderH)
-            val w=renderW; val h=renderH
-            remote { resize(w,h,size.dpi) }
+        if(resizingByTouch || !ready || failed) return
+        val view=texture ?: return
+        if(view.width<1 || view.height<1 || !view.isAvailable) return
+        val size=RenderSizing.forWindow(view.width,view.height,resources.displayMetrics.densityDpi)
+        renderResizes.offer(size)?.let { applyRenderResize(it) }
+    }
+    private fun applyRenderResize(size:RenderSize) {
+        val view=texture ?: return
+        val target=host ?: return
+        if(!ready || failed) return
+        val token=generation
+        renderW=size.width;renderH=size.height
+        view.surfaceTexture?.setDefaultBufferSize(size.width,size.height)
+        io.execute {
+            val error=try { target.resize(size.width,size.height,size.dpi);null } catch(e:Exception) { e }
+            main.post {
+                if(token!=generation || target!==host || !ready || failed) return@post
+                if(error!=null) toast("Redimensionnement refusé : ${error.message}")
+                renderResizes.complete(error==null)?.let { applyRenderResize(it) }
+            }
         }
     }
     private fun remote(action:DirectWindowBridge.()->Unit) {
@@ -481,7 +547,7 @@ class FloatingService : Service() {
     private fun updateWindow() {
         val box=WindowGeometry.clamp(WindowBox(params.x,params.y,params.width,params.height),screenW,screenH,d(120).coerceAtMost(params.width),d(140).coerceAtMost(params.height))
         params.x=box.x;params.y=box.y;params.width=box.width;params.height=box.height
-        root?.let { if(it.isAttachedToWindow) wm.updateViewLayout(it,params) }
+        windowLayoutDirty=true;requestLayoutFrame()
     }
     private fun toggleSize() {
         placement=null
@@ -489,7 +555,7 @@ class FloatingService : Service() {
             savedBox=WindowBox(params.x,params.y,params.width,params.height)
             params.x=0;params.y=0;params.width=screenW;params.height=screenH
         } else savedBox?.let { params.x=it.x;params.y=it.y;params.width=it.width;params.height=it.height }
-        full=!full;updateWindow();resizeDisplay()
+        full=!full;updateWindow();scheduleResize()
     }
     @SuppressLint("ClickableViewAccessibility")
     private fun minimize() {
@@ -517,11 +583,11 @@ class FloatingService : Service() {
         bubbleParams=windowParams(d(56),d(56)).apply { x=screenW-d(60);y=(d(70)+sessions.keys.indexOf(key)*d(64)).coerceIn(0,(screenH-d(56)).coerceAtLeast(0)) }
         b.setOnTouchListener(gesture(onEnd={
             bubbleParams.x=if(bubbleParams.x+ d(28)< screenW/2) d(4) else screenW-d(60)
-            bubble?.let { wm.updateViewLayout(it,bubbleParams) }
-        },onClick={ restore() }) { dx,dy ->
+            bubbleLayoutDirty=true;requestLayoutFrame()
+        }) { dx,dy ->
             bubbleParams.x=(bubbleParams.x+dx).coerceIn(0,(screenW-d(56)).coerceAtLeast(0))
             bubbleParams.y=(bubbleParams.y+dy).coerceIn(0,(screenH-d(56)).coerceAtLeast(0))
-            bubble?.let { wm.updateViewLayout(it,bubbleParams) }
+            bubbleLayoutDirty=true;requestLayoutFrame()
         })
         wm.addView(b,bubbleParams)
     }
@@ -533,20 +599,37 @@ class FloatingService : Service() {
         main.removeCallbacks(rootCheck);if(ready) main.postDelayed(rootCheck,900)
     }
     @SuppressLint("ClickableViewAccessibility")
-    private fun gesture(onEnd:()->Unit={},onClick:()->Unit={},move:(Int,Int)->Unit):View.OnTouchListener {
-        var lastX=0f;var lastY=0f;var startX=0f;var startY=0f;var moved=false
-        val slop=ViewConfiguration.get(this@FloatingService).scaledTouchSlop
+    private fun gesture(onBegin:()->Unit={},onEnd:()->Unit={},move:(Int,Int)->Unit):View.OnTouchListener {
+        val motion=DragMotion(ViewConfiguration.get(this@FloatingService).scaledTouchSlop)
+        var pointerId=-1
+        fun sample(e:MotionEvent,index:Int) {
+            motion.sample(e.getRawX(index),e.getRawY(index))?.let { (dx,dy) -> move(dx,dy) }
+        }
+        fun end(v:View,e:MotionEvent,index:Int,cancelled:Boolean) {
+            if(pointerId<0) return
+            if(!cancelled && index>=0) sample(e,index) // Include the last UP coordinates.
+            val click=!cancelled && !motion.dragging
+            pointerId=-1
+            flushLayouts();onEnd();flushLayouts()
+            if(click) v.performClick()
+        }
         return View.OnTouchListener { v,e ->
             when(e.actionMasked) {
-                MotionEvent.ACTION_DOWN -> { startX=e.rawX;startY=e.rawY;lastX=e.rawX;lastY=e.rawY;moved=false;true }
+                MotionEvent.ACTION_DOWN -> {
+                    pointerId=e.getPointerId(0);motion.begin(e.getRawX(0),e.getRawY(0));onBegin();true
+                }
                 MotionEvent.ACTION_MOVE -> {
-                    if(!moved && (kotlin.math.abs(e.rawX-startX)>slop || kotlin.math.abs(e.rawY-startY)>slop)) moved=true
-                    if(moved) { move((e.rawX-lastX).toInt(),(e.rawY-lastY).toInt());lastX=e.rawX;lastY=e.rawY }
+                    val index=e.findPointerIndex(pointerId)
+                    if(index>=0) sample(e,index)
                     true
                 }
-                MotionEvent.ACTION_UP -> { if(moved) onEnd() else { v.performClick();onClick() };true }
-                MotionEvent.ACTION_CANCEL -> { onEnd();true }
-                else -> false
+                MotionEvent.ACTION_POINTER_UP -> {
+                    if(e.getPointerId(e.actionIndex)==pointerId) { sample(e,e.actionIndex);end(v,e,e.actionIndex,true) }
+                    true
+                }
+                MotionEvent.ACTION_UP -> { end(v,e,e.findPointerIndex(pointerId),false);true }
+                MotionEvent.ACTION_CANCEL -> { end(v,e,-1,true);true }
+                else -> true
             }
         }
     }
@@ -564,7 +647,10 @@ class FloatingService : Service() {
     fun dispose() {
         main.removeCallbacks(rootCheck)
         main.removeCallbacks(raiseRequest);dismissMenu()
-        main.removeCallbacks(resizeUpdate)
+        main.removeCallbacks(resizeUpdate);resizeScheduled=false
+        choreographer.removeFrameCallback(layoutFrame);layoutScheduled=false
+        windowLayoutDirty=false;bubbleLayoutDirty=false
+        renderResizes.discardPending()
         main.removeCallbacks(startupTimeout)
         failed=true
         generation++;ready=false

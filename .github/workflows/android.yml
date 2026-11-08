@@ -37,8 +37,8 @@ jobs:
       - name: Préparer l’aperçu et les entrées de signature
         run: |
           mkdir -p dist/preview dist/signing-inputs
-          cp app/build/outputs/apk/debug/app-debug.apk dist/preview/FloatX-1.0.2-preview.apk
-          cp app/build/outputs/apk/release/app-release-unsigned.apk dist/signing-inputs/FloatX-1.0.2-unsigned.apk
+          cp app/build/outputs/apk/debug/app-debug.apk dist/preview/FloatX-1.0.3-preview.apk
+          cp app/build/outputs/apk/release/app-release-unsigned.apk dist/signing-inputs/FloatX-1.0.3-unsigned.apk
           cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" dist/signing-inputs/
           if [ -f "$ANDROID_HOME/build-tools/35.0.0/NOTICE" ]; then cp "$ANDROID_HOME/build-tools/35.0.0/NOTICE" dist/signing-inputs/TOOLCHAIN-NOTICE.txt; fi
       - name: APK d’aperçu, signature de test
