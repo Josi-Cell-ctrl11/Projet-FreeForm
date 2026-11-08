@@ -24,6 +24,6 @@ public final class CandidatePolicy {
     public static boolean canOffer(String pkg,String activity,boolean enabled,boolean exported,boolean permissionGranted) {
         String a=lower(activity);
         return enabled && exported && permissionGranted && relevant(pkg,activity) &&
-            contains(a,PAGES) && !contains(a,UNSAFE);
+            (NativePages.contains(pkg,activity) || contains(a,PAGES)) && !contains(a,UNSAFE);
     }
 }

@@ -1,3 +1,13 @@
+# DepthX 0.2.0 — accès aux menus natifs
+
+Le rapport réel du X6895 a identifié un menu `DepthFieldWallpaperActivity` exporté et un guide de profondeur du lanceur, ainsi que les entrées principales du sélecteur de fond et du générateur IA. DepthX les présente en premier avec des libellés distincts et recontrôle disponibilité, activation, export et permission à chaque ouverture. Il ne fournit aucun extra d’intention inventé et ne lance pas les aperçus qui pourraient exiger des données inconnues.
+
+L’activité `LockScreenEditActivity` du générateur IA est privée : elle n’est pas lancée directement. Les noms repérés et l’acceptation d’un startActivity ne confirment pas que l’effet peut être appliqué ni qu’il concerne l’horloge de verrouillage ; le contenu des pages doit être testé sur le téléphone. Le guide du lanceur peut concerner seulement l’accueil.
+
+Paquet `com.josias.depthx`, nom **DepthX**, version 0.2.0, code 2. Cette application est distincte du diagnostic initial et de FloatX. La release est signée hors ligne avec sa propre clé permanente ; la clé privée n’est jamais déposée dans GitHub. La référence publique du certificat est dans `signing/depthx-release-sha256.txt`.
+
+Le rapport reste disponible et inclut les demandes d’ouverture acceptées ou refusées, sans affirmer que l’écran cible s’est affiché correctement. Aucun écran n’est ouvert automatiquement, aucun réglage n’est écrit et aucun fond n’est changé par DepthX. Le diagnostic complet reste disponible en dessous des accès ciblés.
+
 # DepthX Diagnostic 0.1.0
 
 Première étape de l’application de fond d’écran à effet de profondeur : inspecter les composants réellement disponibles sur l’Infinix. Ce diagnostic ne crée pas encore de fond à effet de profondeur et ne confirme pas sa disponibilité par de simples noms de composants.

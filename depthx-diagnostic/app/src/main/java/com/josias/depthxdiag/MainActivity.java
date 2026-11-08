@@ -40,6 +40,8 @@ public class MainActivity extends Activity {
     private TextView status;
     private Button scan;
     private String report="";
+    private final StringBuilder attempts=new StringBuilder();
+    private LinearLayout nativePages;
     private static final int SAVE_REPORT=10;
     private static class Page {
         final String label;
@@ -58,7 +60,7 @@ public class MainActivity extends Activity {
         LinearLayout page=new LinearLayout(this);page.setOrientation(LinearLayout.VERTICAL);
         page.setPadding(dp(22),dp(24),dp(22),dp(28));scroll.addView(page);
         page.addView(text("DepthX",34,true,0xFF282237));
-        page.addView(text("Trouvons les options de ton écran verrouillé.",16,false,0xFF696477));
+        page.addView(text("Les accès natifs à la profondeur sur ton Infinix.",16,false,0xFF696477));
         LinearLayout card=new LinearLayout(this);card.setOrientation(LinearLayout.VERTICAL);
         card.setPadding(dp(16),dp(16),dp(16),dp(16));card.setBackground(rounded(0xFFEAE5FC));
         LinearLayout.LayoutParams cardParams=new LinearLayout.LayoutParams(-1,-2);cardParams.topMargin=dp(22);
@@ -66,6 +68,10 @@ public class MainActivity extends Activity {
         card.addView(text(Build.MANUFACTURER+" · "+Build.MODEL,18,true,0xFF3E3376));
         card.addView(text("Android "+Build.VERSION.RELEASE+" · "+Build.DISPLAY,13,false,0xFF696477));
         status=text("Recherche des menus disponibles…",15,false,0xFF3E3376);card.addView(status);
+        page.addView(text("Essayer les accès XOS",20,true,0xFF282237));
+        page.addView(text("Ces boutons ouvrent les menus repérés dans ton rapport. Leur contenu et l’effet derrière l’horloge restent à vérifier sur le téléphone.",14,false,0xFF696477));
+        nativePages=new LinearLayout(this);nativePages.setOrientation(LinearLayout.VERTICAL);page.addView(nativePages);
+        showNativePages();
         scan=button("Analyser à nouveau",this::scan);page.addView(scan);
         page.addView(button("Ouvrir les fonds d’écran",()->open(new Intent(Intent.ACTION_SET_WALLPAPER))));
         page.addView(button("Ouvrir les réglages d’affichage",()->open(new Intent(Settings.ACTION_DISPLAY_SETTINGS))));
@@ -76,7 +82,7 @@ public class MainActivity extends Activity {
         page.addView(button("Voir le rapport",this::showReport));
         page.addView(button("Copier le rapport",()->{
             if(!reportReady()) return;
-            getSystemService(ClipboardManager.class).setPrimaryClip(ClipData.newPlainText("Diagnostic DepthX",report));
+            getSystemService(ClipboardManager.class).setPrimaryClip(ClipData.newPlainText("Diagnostic DepthX",fullReport()));
             toast("Rapport copié. Tu peux le coller dans notre conversation.");
         }));
         page.addView(button("Enregistrer le rapport",()->{
@@ -85,7 +91,7 @@ public class MainActivity extends Activity {
                 .addCategory(Intent.CATEGORY_OPENABLE).putExtra(Intent.EXTRA_TITLE,"DepthX-diagnostic.txt"),SAVE_REPORT); }
             catch(RuntimeException e) { toast("Aucun sélecteur de fichiers disponible. Utilise Copier le rapport."); }
         }));
-        page.addView(text("Diagnostic 0.1.0 · Aucun accès Internet · Aucun changement automatique",12,false,0xFF696477));
+        page.addView(text("DepthX 0.2.0 · Accès natifs · Aucun changement automatique",12,false,0xFF696477));
         page.setOnApplyWindowInsetsListener((view,insets)->{
             android.graphics.Insets bars=insets.getInsets(WindowInsets.Type.systemBars()|WindowInsets.Type.displayCutout());
             view.setPadding(dp(22)+bars.left,dp(24)+bars.top,dp(22)+bars.right,dp(28)+bars.bottom);return insets;
@@ -106,7 +112,7 @@ public class MainActivity extends Activity {
     }
     private Result inspect() {
         Result result=new Result();PackageManager pm=getPackageManager();
-        StringBuilder out=new StringBuilder("DEPTHX — DIAGNOSTIC LOCAL 0.1.0\n");
+        StringBuilder out=new StringBuilder("DEPTHX — ACCÈS NATIFS 0.2.0\n");
         out.append("Fabricant : ").append(Build.MANUFACTURER).append("\nModèle : ").append(Build.MODEL)
             .append("\nAndroid : ").append(Build.VERSION.RELEASE).append(" (API ").append(Build.VERSION.SDK_INT)
             .append(")\nBuild : ").append(Build.DISPLAY).append("\nCorrectif : ").append(Build.VERSION.SECURITY_PATCH).append('\n');
@@ -164,9 +170,11 @@ public class MainActivity extends Activity {
     }
     private void render(Result result) {
         report=result.report;
+        showNativePages();
         status.setText(result.relevantPackages+" composant(s) de personnalisation · "+result.pages.size()+" menu(s) à essayer");
         if(result.pages.isEmpty()) candidates.addView(text("Aucun menu compatible repéré. Copie le rapport pour poursuivre le diagnostic.",15,false,0xFF696477));
         for(Page page:result.pages) {
+            if(NativePages.contains(page.component.getPackageName(),page.component.getClassName())) continue;
             LinearLayout card=new LinearLayout(this);card.setOrientation(LinearLayout.VERTICAL);card.setPadding(dp(12),dp(8),dp(12),dp(12));
             card.setBackground(rounded(Color.WHITE));
             LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(-1,-2);params.topMargin=dp(12);candidates.addView(card,params);
@@ -184,6 +192,44 @@ public class MainActivity extends Activity {
             }));
         }
     }
+    private String fullReport() { return report+"\nESSAIS DES ACCÈS NATIFS\n"+attempts; }
+    private boolean available(ComponentName component) {
+        try {
+            ActivityInfo a=getPackageManager().getActivityInfo(component,0);
+            boolean permitted=a.permission==null||a.permission.isEmpty()||checkSelfPermission(a.permission)==PackageManager.PERMISSION_GRANTED;
+            int state=getPackageManager().getComponentEnabledSetting(component);
+            int appState=getPackageManager().getApplicationEnabledSetting(component.getPackageName());
+            boolean enabled=(state==PackageManager.COMPONENT_ENABLED_STATE_ENABLED ||
+                (state==PackageManager.COMPONENT_ENABLED_STATE_DEFAULT && a.enabled)) &&
+                (appState==PackageManager.COMPONENT_ENABLED_STATE_ENABLED ||
+                (appState==PackageManager.COMPONENT_ENABLED_STATE_DEFAULT && a.applicationInfo.enabled));
+            return CandidatePolicy.canOffer(a.packageName,a.name,enabled,a.exported,permitted);
+        } catch(RuntimeException|PackageManager.NameNotFoundException e) { return false; }
+    }
+    private void showNativePages() {
+        nativePages.removeAllViews();
+        for(NativePages.Entry entry:NativePages.ENTRIES) {
+            ComponentName component=new ComponentName(entry.pkg,entry.activity);
+            LinearLayout card=new LinearLayout(this);card.setOrientation(LinearLayout.VERTICAL);
+            card.setPadding(dp(14),dp(12),dp(14),dp(14));card.setBackground(rounded(Color.WHITE));
+            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.topMargin=dp(12);nativePages.addView(card,lp);
+            card.addView(text(entry.title,17,true,0xFF282237));
+            card.addView(text(entry.description,14,false,0xFF696477));
+            boolean accessible=available(component);
+            Button open=button(accessible?"Ouvrir":"Non accessible sur cette version",()->{
+                if(!available(component)) { attempts.append(entry.title).append(" : accès absent ou bloqué au contrôle.\n");toast("Cet accès n’est plus disponible.");showNativePages();return; }
+                try {
+                    startActivity(new Intent().setComponent(component));
+                    attempts.append(entry.title).append(" : ouverture demandée et acceptée par Android ; contenu non vérifié.\n");
+                } catch(RuntimeException e) {
+                    attempts.append(entry.title).append(" : ouverture refusée (").append(e.getClass().getSimpleName()).append(").\n");
+                    toast("XOS a refusé cette ouverture. Essaie l’entrée suivante.");
+                }
+            });
+            open.setEnabled(accessible);card.addView(open);
+        }
+        nativePages.addView(text("L’éditeur de verrouillage repéré dans le générateur IA est privé à XOS. DepthX ne le lance pas directement.",13,false,0xFF696477));
+    }
     private void open(Intent intent) {
         try { startActivity(intent); }
         catch(SecurityException e) { toast("XOS bloque l’accès à ce menu. Aucun réglage n’a été modifié par DepthX."); }
@@ -191,14 +237,14 @@ public class MainActivity extends Activity {
     }
     private void showReport() {
         if(!reportReady()) return;
-        TextView body=text(report,12,false,0xFF282237);body.setTextIsSelectable(true);body.setPadding(dp(16),dp(12),dp(16),dp(12));
+        TextView body=text(fullReport(),12,false,0xFF282237);body.setTextIsSelectable(true);body.setPadding(dp(16),dp(12),dp(16),dp(12));
         ScrollView scroll=new ScrollView(this);scroll.addView(body);
         new AlertDialog.Builder(this).setTitle("Rapport local").setView(scroll).setPositiveButton("Fermer",null).show();
     }
     @Override protected void onActivityResult(int request,int result,Intent data) {
         super.onActivityResult(request,result,data);
         if(request!=SAVE_REPORT||result!=RESULT_OK||data==null||data.getData()==null) return;
-        Uri uri=data.getData();String content=report;
+        Uri uri=data.getData();String content=fullReport();
         worker.execute(()->{
             try(OutputStream stream=getContentResolver().openOutputStream(uri)) {
                 if(stream==null) throw new IllegalStateException();stream.write(content.getBytes(StandardCharsets.UTF_8));
